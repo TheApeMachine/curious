@@ -1,0 +1,48 @@
+{
+  "cwd": ".",
+  "specPath": "spec/SPEC.md",
+  "cycleDelayMs": 0,
+  "maxCycles": 0,
+  "overseerEveryNCycles": 5,
+  "overseerOnReviewFailStreak": 2,
+  "llm": {
+    "provider": "openai_compat",
+    "model": "qwen3-coder:30b",
+    "baseUrl": "http://127.0.0.1:11434/v1",
+    "apiKey": "local",
+    "maxTokens": 16384,
+    "temperature": 0.2,
+    "timeoutSec": 600,
+    "device": "auto",
+    "loadIn4bit": false,
+    "trustRemoteCode": true,
+    "smolagentsAgentType": "tool-calling"
+  },
+  "_comment_llm_providers": {
+    "openai_compat": "Ollama / vLLM — model is server tag, e.g. qwen3-coder:30b",
+    "transformers": "pip install curious-py[transformers] — model is HF repo id",
+    "smolagents": "pip install curious-py[smolagents] — model is HF repo id",
+    "litellm": "pip install curious-py[litellm] — model e.g. openai/gpt-5.5"
+  },
+  "_comment_llm_smolagents_example": {
+    "provider": "smolagents",
+    "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "device": "auto",
+    "smolagentsAgentType": "tool-calling"
+  },
+  "harness": {
+    "maxTurns": 80,
+    "commandTimeoutSec": 300
+  },
+  "harvest": {
+    "enabled": false,
+    "output": ".curious/harvest/"
+  },
+  "train": {
+    "outputDir": ".curious/train/dpo",
+    "loraR": 16,
+    "loraAlpha": 32,
+    "learningRate": 5e-6,
+    "numTrainEpochs": 1
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "phase": "develop",
+  "cycle": 4,
+  "running": false,
+  "history": [
+    {
+      "cycle": 3,
+      "phase": "develop",
+      "runId": "run-dev-3",
+      "status": "finished",
+      "startedAt": "2026-01-01T00:00:00.000Z",
+      "finishedAt": "2026-01-01T00:05:00.000Z"
+    },
+    {
+      "cycle": 3,
+      "phase": "review",
+      "runId": "run-rev-3",
+      "status": "finished",
+      "startedAt": "2026-01-01T00:05:00.000Z",
+      "finishedAt": "2026-01-01T00:10:00.000Z"
+    },
+    {
+      "cycle": 3,
+      "phase": "sync",
+      "runId": "run-sync-3",
+      "status": "finished",
+      "startedAt": "2026-01-01T00:10:00.000Z",
+      "finishedAt": "2026-01-01T00:15:00.000Z"
+    }
+  ],
+  "updatedAt": "2026-01-01T00:15:00.000Z"
+}

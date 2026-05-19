@@ -33,23 +33,21 @@ The core CLI and orchestrator are implemented in TypeScript (`src/`, compiled to
 |--------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Commands     | `bootstrap`, `roadmap`, `run`, `status`, `reset`, `inspect`, `init` (`src/index.ts`)                                                                             |
 | Orchestrator | Phase loop, run modes (`--until-done`, `--continuous`, `--cycle`, `--cycles`, `--once`), roadmap completion detection (`src/orchestrator.ts`)                    |
-| Agents       | Cursor SDK integration, stable agent id, subagents (developer/reviewer/overseer), fixed `composer-2.5` model (`src/agent.ts`, `src/model.ts`)                    |
+| Agents       | Cursor SDK integration, stable agent id, subagents (developer/reviewer/overseer), fixed `composer-2.5` model; **local** runtime (default, `cwd` + `settingSources`) or optional **cloud** runtime (`cloud.repos` — experimental; see README) (`src/agent.ts`, `src/model.ts`) |
 | Spec parsing | Roadmap task IDs (`T*`, `M*`), section extraction, agent steering injection/sanitization (`src/spec-roadmap.ts`, `src/spec-sections.ts`, `src/spec-steering.ts`) |
 | Prompts      | Bootstrap/roadmap task builders, develop/review/sync/overseer rubrics (`src/prompts.ts`, `src/prompts-tasks.ts`)                                                 |
 | Policies     | Git safety, host-only verification, steering sanitization, source-of-truth guidance (`src/git-policy.ts`, `src/workflow-policy.ts`)                              |
-| Resilience   | Transient error detection, connection guard, retry backoff, `force` send for stuck runs (`src/transient-errors.ts`, `src/connection-guard.ts`)                   |
+| Resilience   | Transient error detection, connection guard, retry backoff, `force` send for stuck runs, hardened `inspect` diagnostics (`src/transient-errors.ts`, `src/connection-guard.ts`, `src/run-diagnostics.ts`, `src/inspect-run.ts`) |
 | State        | `.curious/state.json` persistence (`src/state.ts`)                                                                                                               |
-| Config       | `curious.config.json` + env overrides, parent-directory discovery (`src/config.ts`, `src/project.ts`)                                                            |
+| Config       | `curious.config.json` + `curious.config.example.json` + env overrides, parent-directory discovery (`src/config.ts`, `src/project.ts`) |
 | Harvest      | `curious harvest --format dpo` — JSONL export from `.curious/state.json` + optional git join (`src/harvest/`, `src/review-verdict.ts`)                         |
 | Agent guidelines | `AGENTS.md` at project root — TypeScript/ESM conventions, verification commands, review rubric (inlined in develop/review/overseer prompts)                |
-| Unit tests       | `npm test` — `node:test` + `node:assert/strict`; harness + `src/spec-roadmap.test.ts` (8) + `src/spec-sections.test.ts` (12) + `src/review-feedback.test.ts` (11) + `src/workflow-policy.test.ts` (13) + `src/spec-steering.test.ts` (12) + `src/state.test.ts` (11) + `src/overseer.test.ts` (17) + `src/smoke.test.ts` (7: harness + 6 dogfood smoke) |
+| Docs             | `docs/smoke-test.md` — manual bootstrap → roadmap → `run --cycle` checklist on a fresh sample project                                                         |
+| Unit tests       | `npm test` — `node:test` + `node:assert/strict`; harness + `src/spec-roadmap.test.ts` (8) + `src/spec-sections.test.ts` (12) + `src/review-feedback.test.ts` (11) + `src/workflow-policy.test.ts` (13) + `src/spec-steering.test.ts` (12) + `src/state.test.ts` (11) + `src/overseer.test.ts` (17) + `src/transient-errors.test.ts` (13) + `src/connection-guard.test.ts` (4) + `src/agent.test.ts` (5) + `src/orchestrator-roadmap.test.ts` (12) + `src/orchestrator-cycles.test.ts` (20) + `src/run-diagnostics.test.ts` (19) + `src/review-verdict.test.ts` (3) + `src/harvest/dpo.test.ts` (2) + `src/smoke.test.ts` (7: harness + 6 dogfood smoke) |
 
 ### Gaps (what dogfooding should close)
 
-- Phase 1 complete (**T1.1**–**T1.10**); **T2.1**–**T2.2** resilience module unit tests remain.
-- Orchestrator edge cases and `inspect` diagnostics lack regression coverage — **T2.3**–**T2.5**.
-- README typo (“caramba’s”) and config example gaps — **T3.1**–**T3.2**.
-- Cloud runtime configured in types but not validated here — **T3.4**.
+- Phase 3 documentation complete (**T3.1**–**T3.4**); **Phase 4** release readiness remains.
 - Package pre-1.0; publish process not codified — **Phase 4**.
 
 ## Requirements
@@ -59,14 +57,14 @@ The core CLI and orchestrator are implemented in TypeScript (`src/`, compiled to
 - [x] R3: `bootstrap` and `roadmap` agents write or update `spec/SPEC.md` following the required section schema without editing product source.
 - [x] R4: `run` stops when all `T*` / `M*` tasks in **## Roadmap** are checked (`[x]`), or per explicit mode flags (`--cycle`, `--cycles`, `--continuous`, `--once`).
 - [x] R5: Develop agent implements exactly one unchecked **## Progress** task; review agent emits a structured `review-verdict` with six criteria; sync agent updates Roadmap, Progress, and Orchestrator log.
-- [x] R6: Cursor SDK integration uses a stable agent id, `composer-2.5` (non-overridable), and local runtime with project `cwd` and `settingSources`.
+- [x] R6: Cursor SDK integration uses a stable agent id, `composer-2.5` (non-overridable), **local** runtime (default) with project `cwd` and `settingSources`; optional **cloud** runtime via `cloud.repos` (experimental — README Cloud runtime section).
 - [x] R7: Overseer runs on configurable interval and review-fail streak; analyzes failure patterns and spec drift; **backtracks** misaligned Roadmap/Progress checkboxes; may edit spec sections and optional **## Agent steering**; does not edit product source.
 - [x] R8: Git policy is injected into all agent prompts — read-only git for agents; human commits; reviewers judge `git diff` and working tree, not `HEAD`.
 - [x] R9: Workflow policy enforces host-only verification; on arm64, amd64-tagged tests are optional for review PASS; steering lines demanding commits/CI/worktrees are stripped; agents resolve doubt by reading files.
 - [x] R10: Connection resilience — transient errors retry with backoff; stuck local runs recover via `force`; `inspect` surfaces failed run transcripts.
 - [x] R11: Configuration merges defaults, `curious.config.json`, and environment variables (`CURSOR_API_KEY` required).
-- [ ] R12: README documents install (`npm link` / global), env vars, troubleshooting, and spec shape accurately.
-- [ ] R13: Automated unit tests cover pure-logic modules (spec parsing, review feedback, overseer triggers, workflow/git policy helpers).
+- [x] R12: README documents install (`npm link` / global), env vars, troubleshooting, and spec shape accurately.
+- [x] R13: Automated unit tests cover pure-logic modules (spec parsing, review feedback, overseer triggers, workflow/git policy helpers).
 - [x] R14: `AGENTS.md` at project root defines TypeScript/CLI conventions for develop and review agents working on this repo.
 - [ ] R15: When a develop cycle changes user-facing behavior, prompts, or policies, the same cycle or sync updates **Vision (What exists)**, **Requirements**, and **README** so this spec stays accurate for the next dogfood run.
 - [ ] R16: **Continuous improvement** — when the roadmap is fully checked off, the overseer (or a dedicated roadmap task) promotes prioritized items from **## Next features** into **## Roadmap** + **## Progress** so `curious run --continuous` never stalls for lack of work.
@@ -135,19 +133,19 @@ Tasks use stable IDs. The sync phase checks these off when review passes. **All 
 
 ### Phase 2: Orchestrator & resilience
 
-- [ ] T2.1 — Unit tests for `transient-errors` (`isTransientError`, `isAgentBusyError`, message extraction) (requirement: R10, R13)
-- [ ] T2.2 — Unit tests for `connection-guard` retry delay and max-retry constants (requirement: R10, R13)
-- [ ] T2.3 — Tests or fixtures for orchestrator **roadmap complete** early exit (`untilDone` mode) (requirement: R2, R4)
-- [ ] T2.4 — Tests or fixtures for orchestrator `maxCycles` stop and phase-error resume behavior (requirement: R2, R4)
-- [ ] T2.5 — Harden `inspect` and `run-diagnostics` output for common failure modes; add unit tests for formatters (requirement: R10)
+- [x] T2.1 — Unit tests for `transient-errors` (`isTransientError`, `isAgentBusyError`, message extraction) (requirement: R10, R13)
+- [x] T2.2 — Unit tests for `connection-guard` retry delay and max-retry constants (requirement: R10, R13)
+- [x] T2.3 — Tests or fixtures for orchestrator **roadmap complete** early exit (`untilDone` mode) (requirement: R2, R4)
+- [x] T2.4 — Tests or fixtures for orchestrator `maxCycles` stop and phase-error resume behavior (requirement: R2, R4)
+- [x] T2.5 — Harden `inspect` and `run-diagnostics` output for common failure modes; add unit tests for formatters (requirement: R10)
 - [x] T2.6 — `curious harvest --format dpo`: state + git join, quality filters, tests (`src/harvest/`, `src/review-verdict.ts`) (requirement: R17)
 
 ### Phase 3: Documentation & developer experience
 
-- [ ] T3.1 — Fix README gaps (typo, spec shape table, run modes); sync **Vision (What exists)** if behavior changed (requirement: R12, R15)
-- [ ] T3.2 — Document every `curious.config.json` field in `curious.config.example.json` and README config table (requirement: R11, R12)
-- [ ] T3.3 — Add `docs/smoke-test.md` manual checklist: bootstrap → roadmap → `run --cycle` on a fresh sample project (requirement: R1, R3)
-- [ ] T3.4 — Evaluate cloud runtime config path; document supported behavior or explicit non-goal in README and spec (requirement: R6)
+- [x] T3.1 — Fix README gaps (typo, spec shape table, run modes); sync **Vision (What exists)** if behavior changed (requirement: R12, R15)
+- [x] T3.2 — Document every `curious.config.json` field in `curious.config.example.json` and README config table (requirement: R11, R12)
+- [x] T3.3 — Add `docs/smoke-test.md` manual checklist: bootstrap → roadmap → `run --cycle` on a fresh sample project (requirement: R1, R3)
+- [x] T3.4 — Evaluate cloud runtime config path; document supported behavior or explicit non-goal in README and spec (requirement: R6)
 
 ### Phase 4: Release readiness
 
@@ -183,9 +181,19 @@ _Phase 6 tasks are added by overseer or human when Phases 1–5 are complete. Se
 - [x] T1.8 — Unit tests for `state` (`nextPhase`, `initialState`, path helpers) (requirement: R2, R13)
 - [x] T1.9 — Unit tests for `overseer` triggers (`shouldRunOverseer`, streak counting, history formatting) (requirement: R7, R13)
 - [x] T1.10 — Dogfood smoke: `curious run --cycle` completes develop→review→sync for one Progress task; `npm run build` and `npm test` pass on this host (requirement: R1, R2, R5)
-- [ ] T2.1 — Unit tests for `transient-errors` (`isTransientError`, `isAgentBusyError`, message extraction) (requirement: R10, R13)
+- [x] T2.1 — Unit tests for `transient-errors` (`isTransientError`, `isAgentBusyError`, message extraction) (requirement: R10, R13)
+- [x] T2.2 — Unit tests for `connection-guard` retry delay and max-retry constants (requirement: R10, R13)
+- [x] T2.3 — Tests or fixtures for orchestrator **roadmap complete** early exit (`untilDone` mode) (requirement: R2, R4)
+- [x] T2.4 — Tests or fixtures for orchestrator `maxCycles` stop and phase-error resume behavior (requirement: R2, R4)
+- [x] T2.5 — Harden `inspect` and `run-diagnostics` output for common failure modes; add unit tests for formatters (requirement: R10)
+- [x] T2.6 — `curious harvest --format dpo`: state + git join, quality filters, tests (`src/harvest/`, `src/review-verdict.ts`) (requirement: R17)
+- [x] T3.1 — Fix README gaps (typo, spec shape table, run modes); sync **Vision (What exists)** if behavior changed (requirement: R12, R15)
+- [x] T3.2 — Document every `curious.config.json` field in `curious.config.example.json` and README config table (requirement: R11, R12)
+- [x] T3.3 — Add `docs/smoke-test.md` manual checklist: bootstrap → roadmap → `run --cycle` on a fresh sample project (requirement: R1, R3)
+- [x] T3.4 — Evaluate cloud runtime config path; document supported behavior or explicit non-goal in README and spec (requirement: R6)
+- [ ] T4.1 — Verify npm package contents (`files`, `bin`, `prepare` build) and publish prerequisites (requirement: R12)
 
-**Phase 1 complete.** Continue with `curious run` for batch progress, or `curious run --continuous` to keep improving through Phase 6+ as overseer promotes **## Next features**.
+**Phase 3 complete.** Phase 4 active (**T4.1** next). Continue with `curious run` for batch progress, or `curious run --continuous` to keep improving through Phase 6+ as overseer promotes **## Next features**.
 
 ## Acceptance criteria
 
@@ -208,6 +216,7 @@ A requirement or roadmap task is **done** when:
 | Unit tests             | `npm test` — must pass on this host                                                            |
 | CLI still runs         | `node dist/index.js --help`                                                                                     |
 | Dogfood smoke          | `curious run --cycle` from repo root with `CURSOR_API_KEY` set                                                  |
+| Manual smoke (external) | Follow `docs/smoke-test.md` on a fresh sample project (bootstrap → roadmap → `run --cycle`)                    |
 | Continuous improvement | `curious run --continuous` — use after smoke passes; replenishes from **## Next features** when roadmap is done |
 | Harvest DPO              | `curious harvest --format dpo` — export after dogfood; writes `.curious/harvest/dpo.jsonl` |
 
@@ -232,6 +241,18 @@ On **arm64**, do not require amd64-only or CI output for PASS. Cross-arch code: 
 | 10    | overseer   | ALIGNED | Checkbox audit: T1.1–T1.7 deliverables in tree; npm test 57 pass on arm64; Progress → **T1.8**; no backtrack |
 | 10    | T1.8       | PASS   | `src/state.test.ts` (11 tests); npm test 68 pass on arm64; next **T1.9** |
 | 11    | T1.9       | PASS   | `src/overseer.test.ts` (17 tests); npm test 85 pass on arm64; next **T1.10** |
+| 12    | T1.10      | PASS   | `src/smoke.test.ts` (7: harness + 6 dogfood smoke); npm test 91 pass on arm64; Phase 1 complete; next **T2.1** |
+| 13    | T2.1       | PASS   | `src/transient-errors.test.ts` (13 tests); smoke Progress generic; npm test 109 pass on arm64; next **T2.2** |
+| 14    | T2.2       | PASS   | `src/connection-guard.test.ts` (4 tests); npm test 113 pass on arm64; Phase 2 resilience tests complete; next **T2.3** |
+| 15    | overseer   | ALIGNED | Checkbox audit: T1.1–T2.2 deliverables in tree; T2.6 harvest verified; npm test 113 pass on arm64; Progress → **T2.3**; no backtrack |
+| 15    | T2.3       | PASS   | `src/orchestrator-roadmap.ts` + test (12) + fixtures; npm test 125 pass on arm64; next **T2.4** |
+| 16    | T2.4       | PASS   | `src/orchestrator-cycles.ts` + test (20) + state fixtures; npm test 145 pass on arm64; next **T2.5** |
+| 17    | T2.5       | PASS   | `src/run-diagnostics.ts` + test (19), hardened `inspect-run.ts`; npm test 164 pass on arm64; Phase 2 complete; next **T3.1** |
+| 18    | T3.1       | PASS   | README: typo, spec shape, run modes, inspect docs; npm test 164 pass on arm64; next **T3.2** |
+| 19    | T3.2       | PASS   | `curious.config.example.json` + README config/env tables; npm test 164 pass on arm64; R12 checked; next **T3.3** |
+| 20    | overseer   | ALIGNED | Checkbox audit: T1.1–T3.2 deliverables in tree; T2.6 added to Progress (missed sync); R13 checked; npm test 164 pass on arm64; Progress → **T3.3**; no backtrack |
+| 20    | T3.3       | PASS   | `docs/smoke-test.md` (257 lines): bootstrap→roadmap→run --cycle checklist; npm test 164 pass on arm64; next **T3.4** |
+| 21    | T3.4       | PASS   | README Cloud runtime section; `src/agent.test.ts` (5); npm test 169 pass on arm64; Phase 3 complete; next **T4.1** |
 
 ## Constraints
 
@@ -267,13 +288,14 @@ On **arm64**, do not require amd64-only or CI output for PASS. Cross-arch code: 
 - Agent-initiated git commits, PRs, or branch management (human owns version control).
 - Requiring GitHub Actions or cross-architecture test output for review PASS on this host.
 - Building a hosted SaaS orchestrator — Curious is a local CLI first.
+- **Cloud runtime dogfood** — config/SDK wiring exists; not regression-tested in this repo (experimental passthrough).
 - Using git worktrees for agent isolation in this repo.
 - Meta roadmap tasks that only say “run `curious run` until done” — completion is operational, not a single implementable cycle.
 
 ## Open questions
 
 1. **Test layout:** **Resolved** — co-locate `src/**/*.test.ts` per **AGENTS.md** (T1.1); `node:test` + `node:assert/strict`.
-2. **Cloud runtime:** Defer validation to **T3.4**; treat as experimental until documented.
+2. **Cloud runtime:** **Resolved (experimental)** — `runtime: "cloud"` + `cloud.repos` wired in `src/agent.ts`; local-only force recovery in orchestrator; documented in README; not dogfood-validated here.
 3. **Dogfooding:** **Resolved** — this repo runs `curious run` on its own roadmap; human commits and `npm link` after CLI changes.
 4. **npm publish:** Defer to Phase 4 (**T4.1**–**T4.2**) after test coverage from Phase 1–2.
 5. **Overseer proof:** **T5.1**–**T5.2** combine fixture tests and a documented manual scenario instead of a single long agent run.

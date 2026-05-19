@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "curious-py"
+version = "0.3.0"
+description = "Spec-driven agent workflow — pluggable local HF + HTTP harness"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "huggingface-hub>=0.27.0",
+]
+
+[project.optional-dependencies]
+litellm = ["litellm>=1.60.0"]
+transformers = [
+  "transformers>=4.48.0",
+  "torch>=2.4.0",
+  "accelerate>=1.2.0",
+]
+smolagents = [
+  "smolagents[transformers]>=1.12.0",
+  "transformers>=4.48.0",
+  "torch>=2.4.0",
+  "accelerate>=1.2.0",
+]
+train = [
+  "transformers>=4.48.0",
+  "datasets>=3.0.0",
+  "trl>=0.15.0",
+  "peft>=0.14.0",
+  "accelerate>=1.2.0",
+  "torch>=2.4.0",
+]
+dev = ["pytest>=8.0.0"]
+all = [
+  "curious-py[litellm,transformers,smolagents,train,dev]",
+]
+
+[project.scripts]
+curious-py = "curious.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/curious"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

@@ -1,17 +1,39 @@
 {
+  "_comment": "Copy to curious.config.json at your project root (optional). Merge order: defaults → this file → env vars.",
   "cwd": ".",
-  "_comment_cwd": "Agent working directory relative to project root. Spec is always ./spec/SPEC.md at project root.",
-  "_comment_model": "All runs use composer-2.5 (fixed; model in config is ignored).",
+  "_comment_cwd": "Agent working directory; relative paths resolve from project root. Spec defaults to ./spec/SPEC.md unless specPath is set.",
+  "specPath": "spec/SPEC.md",
+  "_comment_specPath": "Override spec file path (relative to project root or absolute). Default: <projectRoot>/spec/SPEC.md.",
   "runtime": "local",
+  "_comment_runtime": "local (default) or cloud. Cloud requires cloud.repos — experimental; see README Cloud runtime section.",
   "cycleDelayMs": 0,
+  "_comment_cycleDelayMs": "Milliseconds to pause between completed develop→review→sync cycles (0 = no delay).",
   "maxCycles": 0,
+  "_comment_maxCycles": "Stop after N full develop→review→sync rounds (0 = unlimited). Applies to all run modes except single --once.",
   "overseerEveryNCycles": 5,
+  "_comment_overseerEveryNCycles": "Run overseer after every N completed task cycles (0 = disable interval trigger).",
   "overseerOnReviewFailStreak": 2,
-  "settingSources": [
-    "project"
-  ],
+  "_comment_overseerOnReviewFailStreak": "Run overseer after N consecutive review FAILs (0 = disable streak trigger).",
+  "settingSources": ["project"],
+  "_comment_settingSources": "Cursor settings to load: project | user | team | mdm | plugins | all.",
+  "agentId": "agent-curious-my-project",
+  "_comment_agentId": "Stable Cursor agent id for resume across runs. Default: agent-curious-<project-slug>. Env: CURIOUS_AGENT_ID.",
+  "agentName": "curious-my-project",
+  "_comment_agentName": "Display name when creating the agent. Default: curious-<project-slug>.",
+  "apiKey": null,
+  "_comment_apiKey": "Optional; prefer CURSOR_API_KEY env. Never commit real keys.",
+  "model": { "id": "composer-2.5" },
+  "_comment_model": "Ignored — all runs use composer-2.5 (fixed in src/model.ts).",
+  "cloud": {
+    "repos": [{ "url": "https://github.com/org/repo", "startingRef": "main" }],
+    "autoCreatePR": false,
+    "skipReviewerRequest": true,
+    "workOnCurrentBranch": false
+  },
+  "_comment_cloud": "Required when runtime is cloud. repos[].url required; startingRef optional. Not dogfood-tested in curious repo.",
   "harvest": {
     "enabled": false,
     "output": ".curious/harvest/"
-  }
+  },
+  "_comment_harvest": "Fine-tuning export defaults. CLI `curious harvest` runs even when enabled is false."
 }

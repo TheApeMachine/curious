@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "phase": "review",
+  "cycle": 5,
+  "running": false,
+  "lastError": "ECONNRESET: connection lost",
+  "needsForceNextSend": true,
+  "history": [
+    {
+      "cycle": 5,
+      "phase": "develop",
+      "runId": "run-dev-5",
+      "status": "finished",
+      "startedAt": "2026-01-01T00:00:00.000Z",
+      "finishedAt": "2026-01-01T00:05:00.000Z"
+    },
+    {
+      "cycle": 5,
+      "phase": "review",
+      "runId": "run-rev-5",
+      "status": "error",
+      "startedAt": "2026-01-01T00:05:00.000Z",
+      "finishedAt": "2026-01-01T00:06:00.000Z",
+      "summary": "agent disconnected"
+    }
+  ],
+  "updatedAt": "2026-01-01T00:06:00.000Z"
+}

@@ -29,6 +29,15 @@ import {
 } from "./overseer.js";
 import { findLatestFailedReview } from "./review-feedback.js";
 import { agentSteeringForPhase } from "./spec-steering.js";
+import {
+  shouldAbortCyclesModeOnPhaseError,
+  shouldStopAfterRequestedCycles,
+  shouldStopAtConfigMaxCycles,
+} from "./orchestrator-cycles.js";
+import {
+  shouldSkipUntilDoneLoop,
+  shouldStopUntilDoneAfterPhase,
+} from "./orchestrator-roadmap.js";
 import { analyzeRoadmap } from "./spec-roadmap.js";
 import { initialState, loadState, nextPhase, saveState } from "./state.js";
 import type { CuriousConfig, CuriousState, CycleRecord, Phase } from "./types.js";
@@ -114,7 +123,7 @@ export class Orchestrator {
       } else if (this.opts.untilDone) {
         const initial = analyzeRoadmap(await readFile(this.config.specPath, "utf8"));
         this.logRoadmapStatus(initial);
-        if (initial.complete) {
+        if (shouldSkipUntilDoneLoop(initial)) {
           console.log("[curious] roadmap already complete — nothing to do");
           skipLoop = true;
         } else {
@@ -142,30 +151,33 @@ export class Orchestrator {
           break;
         }
 
-        const completedCycles = state.cycle - cycleAtStart;
-        const finishedRequestedCycles =
-          cyclesLimit !== undefined &&
-          state.phase === "develop" &&
-          completedCycles >= cyclesLimit;
+        const finishedRequestedCycles = shouldStopAfterRequestedCycles(
+          state,
+          cycleAtStart,
+          cyclesLimit,
+        );
 
         if (finishedRequestedCycles) {
           console.log(
-            `[curious] finished ${completedCycles} cycle(s) (developer → reviewer → sync)`,
+            `[curious] finished ${state.cycle - cycleAtStart} cycle(s) (developer → reviewer → sync)`,
           );
           this.printContinueHint(cyclesLimit);
           break;
         }
 
-        if (this.opts.untilDone && (await this.roadmapJustCompleted(state))) {
+        if (
+          this.opts.untilDone &&
+          (await this.shouldStopUntilDoneAfterSync(state))
+        ) {
           break;
         }
 
-        if (cyclesLimit !== undefined && state.lastError) {
+        if (shouldAbortCyclesModeOnPhaseError(cyclesLimit, state.lastError)) {
           console.log("[curious] cycle aborted due to phase error");
           break;
         }
 
-        if (this.config.maxCycles > 0 && state.cycle >= this.config.maxCycles) {
+        if (shouldStopAtConfigMaxCycles(state.cycle, this.config.maxCycles)) {
           console.log(`[curious] reached maxCycles=${this.config.maxCycles}`);
           break;
         }
@@ -482,19 +494,15 @@ export class Orchestrator {
   }
 
   /** True after a successful sync when every roadmap task is checked off. */
-  private async roadmapJustCompleted(state: CuriousState): Promise<boolean> {
-    const last = state.history[state.history.length - 1];
-    if (last?.phase !== "sync" || last.status !== "finished") {
+  private async shouldStopUntilDoneAfterSync(
+    state: CuriousState,
+  ): Promise<boolean> {
+    const specBody = await readFile(this.config.specPath, "utf8");
+    if (!shouldStopUntilDoneAfterPhase(state, specBody)) {
       return false;
     }
 
-    const status = analyzeRoadmap(
-      await readFile(this.config.specPath, "utf8"),
-    );
-    if (!status.complete) {
-      return false;
-    }
-
+    const status = analyzeRoadmap(specBody);
     console.log(
       `[curious] roadmap complete — all ${status.totalTasks} tasks checked off`,
     );
