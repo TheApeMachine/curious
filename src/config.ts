@@ -9,6 +9,7 @@ import {
   shouldDiscoverParents,
   slugFromPath,
 } from "./project.js";
+import { currentBranch, gitToplevel } from "./git-branch.js";
 import { hostArchLabel, isArm64Host } from "./workflow-policy.js";
 import type { CuriousConfig, RuntimeKind } from "./types.js";
 
@@ -162,7 +163,7 @@ export async function resolveConfig(
   };
 }
 
-export function printConfigSummary(config: ResolvedConfig): void {
+export async function printConfigSummary(config: ResolvedConfig): Promise<void> {
   console.log(`[curious] project root: ${config.projectRoot}`);
   console.log(`[curious] spec: ${config.specPath}${config.hasSpec ? "" : " (will be created)"}`);
   console.log(`[curious] agent cwd: ${config.cwd}`);
@@ -172,7 +173,6 @@ export function printConfigSummary(config: ResolvedConfig): void {
   );
   console.log("[curious] commits: human only (agents must not git commit)");
   if (config.ensureAgentBranch !== false) {
-    const { currentBranch, gitToplevel } = await import("./git-branch.js");
     const root = await gitToplevel(config.projectRoot);
     const branch = root ? await currentBranch(root) : null;
     const target = config.agentBranch ?? "curious";

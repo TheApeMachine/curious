@@ -200,6 +200,7 @@ export function buildPrompt(args: {
   cycle: number;
   cwd: string;
   projectRoot: string;
+  branchNote?: string;
   agents?: AgentsDocument;
   lastSummary?: string;
   history?: CycleRecord[];
@@ -211,6 +212,7 @@ export function buildPrompt(args: {
     cycle,
     cwd,
     projectRoot,
+    branchNote,
     agents,
     lastSummary,
     history = [],
@@ -233,6 +235,10 @@ export function buildPrompt(args: {
     "",
     GIT_POLICY_SECTION,
   ];
+
+  if (branchNote) {
+    sections.push(branchNote);
+  }
 
   if (steering) {
     sections.push("", formatSteeringPromptBlock(phase, steering));

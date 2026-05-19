@@ -5,6 +5,8 @@
   "maxCycles": 0,
   "overseerEveryNCycles": 5,
   "overseerOnReviewFailStreak": 2,
+  "agentBranch": "curious",
+  "ensureAgentBranch": true,
   "llm": {
     "provider": "openai_compat",
     "model": "qwen3-coder:30b",

@@ -2,6 +2,7 @@ import { Agent, CursorAgentError, type RunResult } from "@cursor/sdk";
 import { buildAgentOptions } from "./agent.js";
 import type { ResolvedConfig } from "./config.js";
 import { logRunFailure } from "./run-diagnostics.js";
+import { prepareAgentWorkspace } from "./workspace.js";
 import { consumeRunStream } from "./stream.js";
 
 export interface RunTaskOptions {
@@ -18,6 +19,7 @@ export async function runAgentTask(
   options: RunTaskOptions = {},
 ): Promise<RunResult> {
   const label = options.label ?? "task";
+  await prepareAgentWorkspace(config);
   console.log(`[curious] ${label} — starting agent`);
 
   const agentOptions = buildAgentOptions({

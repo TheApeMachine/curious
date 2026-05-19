@@ -11,6 +11,8 @@ import {
 } from "./connection-guard.js";
 import type { ResolvedConfig } from "./config.js";
 import { printConfigSummary } from "./config.js";
+import { agentBranchPromptNoteForConfig } from "./git-branch.js";
+import { prepareAgentWorkspace } from "./workspace.js";
 import { loadAgentsDocument, relativeToRoot } from "./project.js";
 import { buildPrompt } from "./prompts.js";
 import {
@@ -86,7 +88,8 @@ export class Orchestrator {
   }
 
   async run(): Promise<void> {
-    printConfigSummary(this.config);
+    await prepareAgentWorkspace(this.config);
+    await printConfigSummary(this.config);
 
     let state = await loadState(this.config.projectRoot);
     state.running = true;
@@ -242,6 +245,7 @@ export class Orchestrator {
       console.log(`[curious] injecting Agent steering into ${phase} prompt`);
     }
 
+    const branchNote = await agentBranchPromptNoteForConfig(this.config);
     const prompt = buildPrompt({
       phase,
       specPath: this.config.specPath,
@@ -250,6 +254,7 @@ export class Orchestrator {
       cycle: state.cycle,
       cwd: this.config.cwd,
       projectRoot: this.config.projectRoot,
+      branchNote,
       agents,
       lastSummary: this.lastSummary,
       history: state.history,

@@ -13,6 +13,7 @@ import {
   WORKFLOW_SPEC_CONSTRAINTS,
 } from "./workflow-policy.js";
 import type { ResolvedConfig } from "./config.js";
+import { agentBranchPromptNoteForConfig } from "./git-branch.js";
 
 const SPEC_SCHEMA = `## Required sections in spec/SPEC.md
 
@@ -73,6 +74,8 @@ export async function buildBootstrapPrompt(config: ResolvedConfig): Promise<stri
     readmeContent = "(README.md not found — infer purpose from code only)";
   }
 
+  const branchNote = await agentBranchPromptNoteForConfig(config);
+
   return `# Curious bootstrap — generate initial spec
 
 You are the **spec author** agent. Your job is to produce the first \`${specRel}\` for this project.
@@ -88,7 +91,7 @@ You are the **spec author** agent. Your job is to produce the first \`${specRel}
 ${buildWorkflowPolicySection(hostArchLabel())}
 
 ${GIT_POLICY_SECTION}
-
+${branchNote}
 ${SPEC_SCHEMA}
 
 ## Workspace
@@ -112,6 +115,7 @@ export async function buildRoadmapPrompt(
   specBody: string,
 ): Promise<string> {
   const specRel = relativeToRoot(config.projectRoot, config.specPath);
+  const branchNote = await agentBranchPromptNoteForConfig(config);
 
   return `# Curious roadmap — expand spec into checkable tasks
 
@@ -131,7 +135,7 @@ You are the **roadmap planner** agent. The spec exists but needs a concrete, che
 ${buildWorkflowPolicySection(hostArchLabel())}
 
 ${GIT_POLICY_SECTION}
-
+${branchNote}
 ${SPEC_SCHEMA}
 
 ## Workspace
