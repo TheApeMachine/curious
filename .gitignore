@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.curious/
+workspace/.curious/
+.env
+*.log
+.DS_Store

@@ -1,0 +1,51 @@
+{
+  "name": "@theapemachine/curious",
+  "version": "0.1.0",
+  "description": "Spec-driven Cursor agent workflow: bootstrap spec, roadmap, developer/reviewer loop",
+  "type": "module",
+  "bin": {
+    "curious": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "bootstrap": "tsx src/index.ts bootstrap",
+    "roadmap": "tsx src/index.ts roadmap",
+    "run": "tsx src/index.ts run",
+    "run:continuous": "tsx src/index.ts run --continuous",
+    "run:once": "tsx src/index.ts run --once",
+    "run:cycle": "tsx src/index.ts run --cycle",
+    "develop": "tsx src/index.ts run --once",
+    "review": "tsx src/index.ts run --once",
+    "sync": "tsx src/index.ts run --once",
+    "status": "tsx src/index.ts status",
+    "inspect": "tsx src/index.ts inspect",
+    "init": "tsx src/index.ts init",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "cursor",
+    "agent",
+    "sdk",
+    "automation",
+    "spec"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@cursor/sdk": "^1.0.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}

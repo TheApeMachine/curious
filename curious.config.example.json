@@ -1,0 +1,11 @@
+{
+  "cwd": ".",
+  "_comment_cwd": "Agent working directory relative to project root. Spec is always ./spec/SPEC.md at project root.",
+  "_comment_model": "All runs use composer-2.5 (fixed; model in config is ignored).",
+  "runtime": "local",
+  "cycleDelayMs": 30000,
+  "maxCycles": 0,
+  "settingSources": [
+    "project"
+  ]
+}
