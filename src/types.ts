@@ -51,6 +51,8 @@ export interface CuriousState {
   running: boolean;
   lastRunId?: string;
   lastError?: string;
+  /** Set after stream/crash errors; next local send uses `force` to clear a wedged run. */
+  needsForceNextSend?: boolean;
   history: CycleRecord[];
   updatedAt: string;
 }

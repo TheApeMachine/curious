@@ -17,7 +17,7 @@ function defaultConfig(projectRoot: string, specPath: string): CuriousConfig {
     cwd: projectRoot,
     runtime: "local",
     model: CURIOUS_MODEL,
-    cycleDelayMs: 30_000,
+    cycleDelayMs: 0,
     maxCycles: 0,
     settingSources: ["project"],
     agentName: `curious-${slugFromPath(projectRoot)}`,

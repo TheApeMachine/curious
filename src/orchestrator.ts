@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { CursorAgentError, type SDKAgent } from "@cursor/sdk";
-import type { SendOptions } from "@cursor/sdk";
+import type { Run, SendOptions } from "@cursor/sdk";
 import { connectAgent } from "./agent.js";
 import type { ResolvedConfig } from "./config.js";
 import { printConfigSummary } from "./config.js";
@@ -9,6 +9,11 @@ import { loadAgentsDocument, relativeToRoot } from "./project.js";
 import { buildPrompt } from "./prompts.js";
 import { logRunFailure } from "./run-diagnostics.js";
 import { consumeRunStream } from "./stream.js";
+import {
+  errorMessage,
+  isAgentBusyError,
+  isTransientError,
+} from "./transient-errors.js";
 import { analyzeRoadmap } from "./spec-roadmap.js";
 import { initialState, loadState, nextPhase, saveState } from "./state.js";
 import type { CuriousConfig, CuriousState, CycleRecord, Phase } from "./types.js";
@@ -24,6 +29,17 @@ export interface OrchestratorOptions {
   cycles?: number;
   /** Stop when every ## Roadmap task checkbox is checked. */
   untilDone?: boolean;
+}
+
+const REMAINING_TASK_PREVIEW = 8;
+
+function formatTaskIdList(ids: string[]): string {
+  if (ids.length === 0) return "";
+  if (ids.length <= REMAINING_TASK_PREVIEW) {
+    return ids.join(", ");
+  }
+  const head = ids.slice(0, REMAINING_TASK_PREVIEW).join(", ");
+  return `${head}, … (+${ids.length - REMAINING_TASK_PREVIEW} more)`;
 }
 
 export class Orchestrator {
@@ -134,7 +150,7 @@ export class Orchestrator {
           console.log(
             `[curious] next: cycle ${state.cycle} · develop (see spec Progress)`,
           );
-          if (state.cycle > 0) {
+          if (this.config.cycleDelayMs > 0) {
             console.log(`[curious] sleeping ${this.config.cycleDelayMs}ms`);
             await sleep(this.config.cycleDelayMs);
           }
@@ -191,8 +207,6 @@ export class Orchestrator {
     let status: CycleRecord["status"] = "error";
     let summary: string | undefined;
 
-    const retryAfterError = Boolean(state.lastError);
-
     try {
       const sendOptions: SendOptions = {
         onStep: this.opts.verbose
@@ -202,12 +216,13 @@ export class Orchestrator {
           : undefined,
       };
 
-      if (this.config.runtime === "local" && retryAfterError) {
+      if (this.shouldForceLocalRun(state)) {
         sendOptions.local = { force: true };
-        console.log("[curious] retrying after error — expiring any stuck local run");
+        console.log("[curious] expiring any stuck local run before send");
+        state.needsForceNextSend = false;
       }
 
-      const run = await this.agent.send(prompt, sendOptions);
+      const run = await this.sendPrompt(prompt, sendOptions);
       runId = run.id;
       console.log(`[curious] run ${runId}`);
       console.log(
@@ -235,6 +250,7 @@ export class Orchestrator {
           this.stopping = true;
         } else {
           state.lastError = undefined;
+          state.needsForceNextSend = false;
           console.log(
             `[curious] run finished in ${result.durationMs ?? "?"}ms`,
           );
@@ -248,16 +264,34 @@ export class Orchestrator {
         statusStop();
       }
     } catch (err) {
-      if (err instanceof CursorAgentError) {
-        state.lastError = err.message;
-        console.error(`[curious] startup failure: ${err.message} (retryable=${err.isRetryable})`);
+      const message = errorMessage(err);
+
+      if (isTransientError(err)) {
+        state.lastError = message;
+        state.needsForceNextSend = true;
+        console.error(
+          `[curious] transient error during ${phase} (will retry same phase in 10s): ${message}`,
+        );
+        await sleep(10_000);
+      } else if (isAgentBusyError(err)) {
+        state.lastError = message;
+        state.needsForceNextSend = true;
+        console.error(
+          `[curious] agent busy (will retry ${phase} with force in 5s): ${message}`,
+        );
+        await sleep(5_000);
+      } else if (err instanceof CursorAgentError) {
+        state.lastError = message;
+        console.error(
+          `[curious] agent error: ${message} (retryable=${err.isRetryable})`,
+        );
         if (err.isRetryable) {
           await sleep(10_000);
         } else {
           this.stopping = true;
         }
       } else {
-        state.lastError = err instanceof Error ? err.message : String(err);
+        state.lastError = message;
         throw err;
       }
     }
@@ -291,16 +325,52 @@ export class Orchestrator {
     return state;
   }
 
+  private shouldForceLocalRun(state: CuriousState): boolean {
+    if (this.config.runtime !== "local") {
+      return false;
+    }
+    if (state.needsForceNextSend || state.lastError) {
+      return true;
+    }
+    const last = state.history.at(-1);
+    return last !== undefined && last.status !== "finished";
+  }
+
+  private async sendPrompt(
+    prompt: string,
+    sendOptions: SendOptions,
+  ): Promise<Run> {
+    if (!this.agent) {
+      throw new Error("Agent not connected");
+    }
+
+    try {
+      return await this.agent.send(prompt, sendOptions);
+    } catch (err) {
+      if (
+        this.config.runtime === "local" &&
+        isAgentBusyError(err) &&
+        !sendOptions.local?.force
+      ) {
+        console.log("[curious] agent busy — retrying send with force");
+        return await this.agent.send(prompt, {
+          ...sendOptions,
+          local: { ...sendOptions.local, force: true },
+        });
+      }
+      throw err;
+    }
+  }
+
   private logRoadmapStatus(status: ReturnType<typeof analyzeRoadmap>): void {
     if (status.totalTasks === 0) {
       console.log("[curious] roadmap: no T*/M* tasks found in ## Roadmap");
       return;
     }
+    const remaining = formatTaskIdList(status.uncheckedTaskIds);
     console.log(
       `[curious] roadmap: ${status.checkedTasks}/${status.totalTasks} tasks done` +
-        (status.uncheckedTaskIds.length > 0
-          ? ` (remaining: ${status.uncheckedTaskIds.join(", ")})`
-          : ""),
+        (remaining ? ` (remaining: ${remaining})` : ""),
     );
   }
 
