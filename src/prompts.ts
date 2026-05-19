@@ -1,6 +1,10 @@
 import type { AgentsDocument } from "./project.js";
 import { formatHistoryForOverseer } from "./overseer.js";
 import {
+  findLatestFailedReview,
+  formatFailedReviewForDevelop,
+} from "./review-feedback.js";
+import {
   agentSteeringForPhase,
   formatSteeringPromptBlock,
   stripAgentSteering,
@@ -107,6 +111,7 @@ ${agentsLine}
 
 Rules:
 - Implement exactly **one** unchecked roadmap task from **## Progress** (lowest ID first).
+- If **Review feedback (FAIL)** appears below, you are **fixing the same task** after a failed review — satisfy every blocking issue and rubric item there before the next review.
 - If **Agent steering** appears below, it is exceptional corrective guidance from the overseer — follow it for this run. If absent, proceed from the spec only.
 - All code and tests must satisfy AGENTS.md and the spec.
 - **Paste test/benchmark command output** in your final summary.
@@ -191,6 +196,8 @@ export function buildPrompt(args: {
   const hasAgents = Boolean(agents?.content);
   const steering = agentSteeringForPhase(specBody, phase);
   const specForPrompt = stripAgentSteering(specBody);
+  const failedReview =
+    phase === "develop" ? findLatestFailedReview(history) : undefined;
 
   const sections = [
     `# Curious — cycle ${cycle}, phase: ${phase.toUpperCase()}`,
@@ -200,6 +207,10 @@ export function buildPrompt(args: {
 
   if (steering) {
     sections.push("", formatSteeringPromptBlock(phase, steering));
+  }
+
+  if (failedReview) {
+    sections.push("", formatFailedReviewForDevelop(failedReview));
   }
 
   sections.push(
@@ -232,7 +243,7 @@ export function buildPrompt(args: {
     );
   }
 
-  if (lastSummary?.trim()) {
+  if (lastSummary?.trim() && !failedReview) {
     sections.push("", "## Previous run summary", lastSummary.trim());
   }
 

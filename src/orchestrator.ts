@@ -22,6 +22,7 @@ import {
   overseerTriggerReason,
   shouldRunOverseer,
 } from "./overseer.js";
+import { findLatestFailedReview } from "./review-feedback.js";
 import { agentSteeringForPhase } from "./spec-steering.js";
 import { analyzeRoadmap } from "./spec-roadmap.js";
 import { initialState, loadState, nextPhase, saveState } from "./state.js";
@@ -201,6 +202,10 @@ export class Orchestrator {
     if (phase === "overseer") {
       console.log(
         `[curious] overseer triggered: ${overseerTriggerReason(state, this.config)}`,
+      );
+    } else if (phase === "develop" && findLatestFailedReview(state.history)) {
+      console.log(
+        "[curious] injecting full failed review into develop prompt",
       );
     } else if (agentSteeringForPhase(specBody, phase)) {
       console.log(`[curious] injecting Agent steering into ${phase} prompt`);

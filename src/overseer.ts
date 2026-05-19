@@ -1,3 +1,4 @@
+import { isReviewFail } from "./review-feedback.js";
 import type { CuriousConfig, CuriousState, CycleRecord } from "./types.js";
 
 const HISTORY_LIMIT = 40;
@@ -60,18 +61,13 @@ export function countTrailingReviewFails(history: CycleRecord[]): number {
     if (record.phase !== "review" || record.status !== "finished") {
       break;
     }
-    if (!reviewSummaryIsFail(record.summary)) {
+    if (!isReviewFail(record.summary)) {
       break;
     }
     count++;
   }
 
   return count;
-}
-
-function reviewSummaryIsFail(summary?: string): boolean {
-  if (!summary) return false;
-  return /OVERALL:\s*FAIL/i.test(summary);
 }
 
 /** Recent orchestrator history for the overseer prompt. */

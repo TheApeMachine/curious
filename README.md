@@ -21,7 +21,7 @@ You refine the spec after bootstrap. The loop reads **Progress** for the next ta
 
 | Phase       | Agent     | Responsibility                                                                                                             |
 |-------------|-----------|----------------------------------------------------------------------------------------------------------------------------|
-| **develop** | Developer | One unchecked **Progress** task (lowest ID); writes code and tests; does not edit the spec                                 |
+| **develop** | Developer | One **Progress** task; after review **FAIL**, gets the **full review** in-prompt and re-works the same task until it passes |
 | **review**  | Reviewer  | Audits the diff; outputs a `review-verdict` block (five criteria + **OVERALL: PASS/FAIL**)                                 |
 | **sync**    | Sync      | On PASS: checks off **Roadmap** / **Progress**, updates **Orchestrator log**; on FAIL: records blockers, leaves tasks open |
 | **overseer** | Overseer | Meta-review: failure patterns, spec alignment; may edit Roadmap/Progress; **optionally** adds **Agent steering** when something needs correction; no code |
