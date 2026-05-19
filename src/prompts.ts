@@ -10,6 +10,7 @@ import {
   stripAgentSteering,
 } from "./spec-steering.js";
 import { GIT_POLICY_SECTION } from "./git-policy.js";
+import { buildWorkflowPolicySection, hostArchLabel } from "./workflow-policy.js";
 import type { CycleRecord, Phase } from "./types.js";
 
 const REVIEW_RUBRIC = `
@@ -17,6 +18,7 @@ const REVIEW_RUBRIC = `
 
 You are the **reviewer**. Judge whether the **developer** delivered acceptable work.
 Inspect the working tree, \`git diff\`, tests, and **AGENTS.md** (inlined below).
+If unsure about any claim, **read the files** — on-disk content is the source of truth, not prior summaries or \`HEAD\` alone.
 
 Emit this exact block at the end of your review:
 
@@ -37,6 +39,11 @@ next_develop:
 \`\`\`
 
 **OVERALL: PASS** only when all six criteria are PASS.
+
+**5_verification** — apply **Workflow** (host-only): PASS when tests that **run on this machine** pass and the working tree contains the deliverable. **FAIL** only for real code/test gaps on this host — **not** for uncommitted changes, **not** for missing amd64/AVX-512 output on arm64, **not** for absent CI/GitHub Actions.
+
+**3_spec_compliance** — judge the **working tree**, not \`HEAD\`. Uncommitted work is valid.
+
 **6_git_safety: FAIL** if develop (or any agent this cycle) ran a mutating git command (see Git policy) or discarded uncommitted work via git.
 Do not implement fixes — only analyze.
 `;
@@ -44,33 +51,39 @@ Do not implement fixes — only analyze.
 const OVERSEER_RUBRIC = `
 ## Overseer rubric (mandatory)
 
-You are the **overseer** — above the developer, reviewer, and sync agents. You do not write product code.
+You are the **overseer** — above the developer, reviewer, and sync agents. You do not write product code. You **own spec corrections** when the living spec drifts from reality or the loop needs realignment.
 
-### Analyze
-1. **Repeated failure modes** — read orchestrator history and review FAIL summaries. Cluster recurring blocking_issues, flaky tests, spec drift, scope creep, or wrong task ordering.
-2. **Spec alignment** — compare Vision, Requirements, Roadmap, Progress, and Acceptance criteria to what the team actually shipped (history + \`git log\` / diff if needed).
-3. **Process health** — are tasks the right size? Is Progress pointing at the right next task? Are phases stuck or redoing work?
+### Analyze (read files — source of truth)
+
+1. **Repeated failure modes** — orchestrator history and review FAIL summaries; cluster recurring blocking_issues, flaky tests, spec drift, scope creep, wrong task ordering.
+2. **Spec alignment** — Vision, Requirements, Roadmap, Progress, Acceptance criteria vs what is in the repo (**read** sources and \`git diff\`; history is hints only).
+3. **Process health** — task sizing, Progress focus, stuck phases, redoing work.
+4. **Checkbox backtracking** — Roadmap/Progress vs the working tree:
+   - **Checked off but not done** — \`[x]\` but deliverable missing (false PASS, premature checkoff).
+   - **Done but not checked off** — work present, still \`[ ]\` (missed sync).
+   - **Wrong active task** — Progress points at the wrong ID.
 
 ### You may edit \`spec/SPEC.md\` only
+
 Allowed sections: **Vision**, **Requirements**, **Roadmap**, **Progress**, **Acceptance criteria**, **Agent steering**, **Orchestrator log**, **Open questions**, **Constraints**.
+
+- **Backtrack** Roadmap/Progress when misalignment is clear from files (uncheck/check boxes, set Progress, log in Orchestrator log).
 - Reprioritize or split/merge roadmap tasks when alignment requires it.
-- Clarify requirements or acceptance criteria when reviews keep failing for the same reason.
-- Reset **Progress** to the correct next task(s) for the developer.
-- **\`## Agent steering\` is optional** — add or update it **only** when develop/review/sync need concrete corrective guidance (repeated failures, drift, confusion). When the team is healthy, **do not** add steering; clear stale bullets or leave the section empty / \`(none)\`.
-- Do **not** check off roadmap tasks (sync owns that after review PASS).
+- Clarify requirements or acceptance criteria when reviews keep failing for the same reason — **do not** add criteria requiring agent commits, CI, worktrees, or amd64 test output on arm64 hosts (see Workflow).
+- Reset **Progress** to the correct next task(s).
+- **\`## Agent steering\` is optional** — add or update **only** when develop/review/sync need concrete corrective guidance; clear stale bullets or \`(none)\` when healthy.
+- Do **not** check off tasks on the forward path (sync owns that after review PASS).
 - Do **not** edit source files, AGENTS.md, or README unless the spec explicitly says to.
 
 ### Agent steering (exception, not default)
 
-Steering is injected into downstream prompts **only when** you write actionable bullets. Empty or \`(none)\` means no injection — agents follow the spec and AGENTS.md as usual.
-
-Use **only** when something must improve, e.g. recurring review FAILs, wrong task focus, missing verification habits:
+Steering is injected into downstream prompts **only when** you write actionable bullets. Empty or \`(none)\` means no injection.
 
 \`\`\`markdown
 ## Agent steering
 
 ### Developer
-- (specific corrective bullet — omit subsection if nothing for developer)
+- (specific bullet — omit subsection if nothing)
 
 ### Reviewer
 - (specific bullet — omit if nothing)
@@ -79,26 +92,30 @@ Use **only** when something must improve, e.g. recurring review FAILs, wrong tas
 - (specific bullet — omit if nothing)
 \`\`\`
 
-When **OVERALL: ALIGNED** and failure_patterns are clean: remove outdated steering or set the section to \`(none)\`. Do not invent guidance for a well-running team.
+When **OVERALL: ALIGNED** and patterns are clean: remove outdated steering or set \`(none)\`; do not invent guidance for a well-running team.
 
 ### Emit this block at the end
 
 \`\`\`overseer-verdict
 OVERALL: ALIGNED | DRIFT | BLOCKED
+misalignments:
+- (checkbox/task vs repo; "none" if clean)
+backtrack_actions:
+- (Roadmap/Progress checkbox edits, or "none")
 failure_patterns:
 - (recurring themes; "none" if clean)
 spec_adjustments:
-- (bullet list of spec edits made, or "none")
+- (other spec edits made, or "none")
 steering_updated: yes | no | cleared
 alignment_notes:
-- (how well the team matches the full spec)
+- (evidence: files/lines; human-needed gaps)
 next_develop:
-- (single task ID the developer should take next, e.g. T1.5)
+- (single task ID, e.g. T2.1)
 \`\`\`
 
-**OVERALL: DRIFT** — spec updated to realign; developer should follow new Progress.
-**OVERALL: BLOCKED** — fundamental spec/process issue; explain in alignment_notes.
-**OVERALL: ALIGNED** — no spec edits required unless clearing stale steering; confirm next_develop. Prefer **steering_updated: no** or **cleared** when healthy.
+**OVERALL: DRIFT** — spec updated (backtrack and/or other sections); develop follows **next_develop**.
+**OVERALL: BLOCKED** — fundamental issue; explain in alignment_notes; prefer minimal spec edits.
+**OVERALL: ALIGNED** — no spec edits required unless clearing stale steering; confirm **next_develop**.
 `;
 
 function phaseGoals(phase: Phase, hasAgents: boolean): string {
@@ -115,11 +132,13 @@ ${agentsLine}
 Rules:
 - Implement exactly **one** unchecked roadmap task from **## Progress** (lowest ID first).
 - If **Review feedback (FAIL)** appears below, you are **fixing the same task** after a failed review — satisfy every blocking issue and rubric item there before the next review.
-- If **Agent steering** appears below, it is exceptional corrective guidance from the overseer — follow it for this run. If absent, proceed from the spec only.
-- All code and tests must satisfy AGENTS.md and the spec.
-- **Paste test/benchmark command output** in your final summary.
+- If **Agent steering** appears below, it is corrective guidance from the overseer — follow it for this run. If absent, proceed from the spec only.
+- All code and tests must satisfy AGENTS.md and the spec on **this host** (see Workflow).
+- **Paste test/benchmark output** for commands that actually run here.
+- Deliver fixes in the **working tree**; the human commits later — never \`git add\` / \`git commit\`.
 - Do not edit **## Roadmap**, **## Progress**, **## Agent steering**, or **## Orchestrator log** (sync/overseer own those).
-- If blocked, stop and state the blocker — no placeholders.`;
+- If blocked on code you cannot write or tests that cannot run on this host, stop and state the blocker — do not block on commit, CI, or cross-arch test output.
+- **When in doubt**, read the relevant files (\`read\` / \`grep\` / \`git diff\`) — file content beats summaries or memory.`;
 
     case "review":
       return `You are the **reviewer** agent.
@@ -143,13 +162,14 @@ Update the spec file at the path below only:
 - Update **## Orchestrator log** table: cycle, task ID, review verdict, next develop target.
 - If **Agent steering** appears below, follow it when recording the log; otherwise use normal sync rules.
 - Do **not** edit **## Agent steering** (overseer only).
-- Keep edits minimal and factual.`;
+- Keep edits minimal and factual.
+- Base log entries on the **review verdict and files**, not assumptions — read the spec if unsure.`;
 
     case "overseer":
       return `You are the **overseer** agent (meta — above reviewer and sync).
 
 ${agentsLine}
-Read the full spec, orchestrator history below, and recent git activity.
+Read the full spec, working tree, and orchestrator history below. Realign the spec when needed — including **backtracking** misaligned Roadmap/Progress checkboxes.
 
 You may delegate analysis to the \`overseer\` subagent, but you must apply any spec edits and emit the verdict yourself.
 
@@ -201,10 +221,13 @@ export function buildPrompt(args: {
   const failedReview =
     phase === "develop" ? findLatestFailedReview(history) : undefined;
 
+  const hostArch = hostArchLabel();
   const sections = [
     `# Curious — cycle ${cycle}, phase: ${phase.toUpperCase()}`,
     "",
     phaseGoals(phase, hasAgents),
+    "",
+    buildWorkflowPolicySection(hostArch),
     "",
     GIT_POLICY_SECTION,
   ];

@@ -1,4 +1,5 @@
 import { extractSpecSection, stripSpecSection } from "./spec-sections.js";
+import { sanitizeSteering } from "./workflow-policy.js";
 import type { Phase } from "./types.js";
 
 export const AGENT_STEERING_HEADING = "## Agent steering";
@@ -71,13 +72,18 @@ export function agentSteeringForPhase(
 
   const phaseSpecific = extractSubsection(section, subsectionTitle);
   if (phaseSpecific) {
-    return phaseSpecific;
+    const { text } = sanitizeSteering(phaseSpecific);
+    if (!text.trim() || !isActionableSteering(text)) {
+      return null;
+    }
+    return text;
   }
 
   // Shared bullets only when there are no ### subsections at all
   const hasSubsections = /^### /m.test(section);
   if (!hasSubsections && isActionableSteering(section)) {
-    return section;
+    const { text } = sanitizeSteering(section);
+    return isActionableSteering(text) ? text : null;
   }
 
   return null;

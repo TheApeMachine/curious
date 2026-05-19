@@ -7,6 +7,11 @@ import {
   relativeToRoot,
 } from "./project.js";
 import { GIT_POLICY_SECTION, GIT_POLICY_SPEC_CONSTRAINT } from "./git-policy.js";
+import {
+  buildWorkflowPolicySection,
+  hostArchLabel,
+  WORKFLOW_SPEC_CONSTRAINTS,
+} from "./workflow-policy.js";
 import type { ResolvedConfig } from "./config.js";
 
 const SPEC_SCHEMA = `## Required sections in spec/SPEC.md
@@ -20,7 +25,7 @@ Write or update the file with these sections (in order):
 5. **## Progress** — mirror of active roadmap items (sync phase maintains this)
 6. **## Acceptance criteria** — definition of done
 7. **## Orchestrator log** — table for automation (leave initial row)
-8. **## Constraints** — tech, style, non-goals (from AGENTS.md when present); include: ${GIT_POLICY_SPEC_CONSTRAINT}
+8. **## Constraints** — tech, style, non-goals (from AGENTS.md when present); include: ${GIT_POLICY_SPEC_CONSTRAINT} ${WORKFLOW_SPEC_CONSTRAINTS}
 9. **## Open questions** — unresolved decisions
 
 Do **not** add **## Agent steering** unless the project already needs it — the overseer creates that section only when corrective guidance is required.
@@ -80,6 +85,8 @@ You are the **spec author** agent. Your job is to produce the first \`${specRel}
 4. Do **not** implement product code — only author the spec file.
 5. End with a short summary of what you captured and what the user should refine.
 
+${buildWorkflowPolicySection(hostArchLabel())}
+
 ${GIT_POLICY_SECTION}
 
 ${SPEC_SCHEMA}
@@ -120,6 +127,8 @@ You are the **roadmap planner** agent. The spec exists but needs a concrete, che
    - Keep Vision, Constraints, and Acceptance criteria accurate.
 3. Do **not** implement product code — only edit the spec.
 4. Tasks must be small enough for one develop→review cycle each.
+
+${buildWorkflowPolicySection(hostArchLabel())}
 
 ${GIT_POLICY_SECTION}
 

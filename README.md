@@ -24,7 +24,7 @@ You refine the spec after bootstrap. The loop reads **Progress** for the next ta
 | **develop** | Developer | One **Progress** task; after review **FAIL**, gets the **full review** in-prompt and re-works the same task until it passes |
 | **review**  | Reviewer  | Audits the diff; outputs a `review-verdict` block (six criteria incl. git safety + **OVERALL: PASS/FAIL**)                 |
 | **sync**    | Sync      | On PASS: checks off **Roadmap** / **Progress**, updates **Orchestrator log**; on FAIL: records blockers, leaves tasks open |
-| **overseer** | Overseer | Meta-review: failure patterns, spec alignment; may edit Roadmap/Progress; **optionally** adds **Agent steering** when something needs correction; no code |
+| **overseer** | Overseer | Meta-review: failure patterns, spec alignment, **checkbox backtracking** when Roadmap/Progress drift from the repo; may edit spec sections and optional **Agent steering**; no code |
 
 After **sync** completes a task cycle, **overseer** may run before the next **develop** when:
 
@@ -33,11 +33,21 @@ After **sync** completes a task cycle, **overseer** may run before the next **de
 
 Set either interval to `0` in `curious.config.json` to disable that trigger.
 
+### Overseer
+
+Runs after sync on a schedule or after repeated review FAILs. The overseer **owns spec corrections** when the spec and repo diverge:
+
+| Responsibility | Examples |
+|----------------|----------|
+| **Backtracking** | Uncheck `[x]` when work is not in the tree; check or reopen when work is done but still `[ ]`; fix **Progress** |
+| **Alignment** | Failure patterns, drift vs Vision/Requirements, reprioritize or clarify roadmap/acceptance criteria |
+| **Agent steering** | Optional corrective bullets for develop/review/sync when something concrete needs to improve |
+
+Judges from **file content** (not chat history). Respects Workflow: no agent commits, host-only verification, no CI/amd64-on-arm requirements in acceptance criteria. Does not edit product source.
+
 ### Agent steering (optional, exception-only)
 
-When the overseer finds **concrete** problems (repeated review FAILs, drift, wrong focus), it may add **`## Agent steering`** to the spec with `### Developer`, `### Reviewer`, and/or `### Sync` bullets. Curious injects only **actionable** bullets into that phase’s prompt (above AGENTS.md).
-
-When the team is healthy, the overseer leaves steering empty or clears it — **no injection**, and develop/review/sync run from the spec and AGENTS.md as usual. Steering is the exception, not a standing requirement.
+When the overseer finds concrete problems, it may add **`## Agent steering`** with `### Developer`, `### Reviewer`, and/or `### Sync` bullets. Curious injects only actionable bullets into that phase’s prompt. When healthy, the overseer clears steering — no injection, and develop/review/sync run from the spec and AGENTS.md as usual.
 
 State (current phase, cycle, run history) lives in `.curious/state.json`. A durable Cursor agent (`agent-curious-<project>`) is created once and resumed on later runs.
 
@@ -150,13 +160,21 @@ After bootstrap and roadmap, `spec/SPEC.md` typically includes:
 
 Task IDs in the roadmap use `T1.1` or `M0` style. The orchestrator only treats **## Roadmap** checkboxes with those IDs as completion criteria (not **Requirements**).
 
-### Git policy (all agents)
+### Workflow (host + human commits)
 
-Every phase prompt includes a **binding** read-only git rule: agents may use `git status`, `git diff`, `git log`, `git show`, and similar read commands only. They must **not** run mutating git (`reset`, `restore`, `checkout`/`switch` to discard work, `clean`, `stash`, `commit`, `rebase`, etc.). The reviewer scores **6_git_safety** and fails the run if develop used mutating git.
+Curious detects the machine it runs on (e.g. **arm64**) and injects a **Workflow** policy into every phase:
 
-This is enforced in prompts (the Cursor SDK does not offer a shell denylist). For stronger protection in a target repo, add the same rule to **AGENTS.md** or a Cursor rule, and use [hooks](https://cursor.com/docs/agent/hooks) to block mutating `git` in the shell if needed.
+| Rule | Behavior |
+|------|----------|
+| **Commits** | **You** commit; agents never do. Review judges the **working tree** — uncommitted fixes are valid. |
+| **Verification** | Tests on **this host only**. No GitHub Actions, CI URLs, or worktrees required. |
+| **arm64** | `//go:build amd64` tests do not need to run; host tests + code review suffice for **5_verification** PASS. |
+| **Steering** | Overseer may add steering; bullets demanding commit/CI/amd64 proof are stripped before injection. |
+| **In doubt** | Read **file content** (`read`, `grep`, `git diff`) — not chat history, `HEAD`, or old reviews. |
 
-Bootstrap seeds the constraint into **## Constraints** in new specs.
+Read-only **Git policy** still applies (no `reset`, `restore`, `commit`, `worktree`, etc.). For shell-level blocking, add hooks in the target repo.
+
+Bootstrap seeds these constraints into new specs. **Edit caramba’s `spec/SPEC.md`** to soften acceptance criteria that still require amd64 CI or “branch tip == HEAD” if the overseer added them.
 
 ## Commands
 
@@ -226,7 +244,8 @@ All agent runs use **Composer 2.5** (`composer-2.5`). The model is fixed and can
 - **`ECONNRESET` / connection dropped** — curious retries the same phase after 10s instead of exiting.
 - **`already has active run`** — a prior run was left wedged (often after a crash). Curious retries with `force` to expire it; rebuild curious if you still see `retryable=false` and the process exits.
 - **`ECONNRESET` loop on review** — curious retries with backoff (15s → 30s → …), reconnects the agent after 3 drops, and stops after 12 failures per phase so you can re-run `curious run` instead of crashing.
-- **Agent discarded uncommitted work via git** — review should FAIL **6_git_safety**. Re-run develop; do not use `git reset`/`restore` yourself unless you intend to. Consider a shell hook in the project to hard-block mutating git for agents.
+- **Agent discarded uncommitted work via git** — review should FAIL **6_git_safety**. Re-run develop; do not use `git reset`/`restore` yourself unless you intend to.
+- **Review FAIL for “not committed” or “no amd64 output” on arm64** — rebuild curious; workflow policy treats those as non-blocking. Trim the same requirements from **Acceptance criteria** in your spec if needed.
 
 ## License
 

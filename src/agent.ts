@@ -42,26 +42,27 @@ export function buildAgentOptions(config: CuriousConfig, agentId?: string): Agen
       developer: {
         description:
           "Implements one roadmap task: code, tests, benchmarks. Use during develop phase.",
-        prompt: `You are the developer. Implement one spec roadmap task with tests.
-AGENTS.md is inlined in the parent prompt — follow it exactly. Paste verification output.
-Do not edit Roadmap/Progress sections.
-${GIT_POLICY_SUBAGENT}`,
+        prompt: `You are the developer. Implement one spec roadmap task with tests on this host only.
+AGENTS.md is inlined in the parent prompt — follow it exactly. Paste host-runnable test output.
+Deliver in the working tree; human commits. When in doubt, read files — they are the source of truth.
+Do not edit Roadmap/Progress sections. ${GIT_POLICY_SUBAGENT}`,
         model: "inherit",
       },
       reviewer: {
         description:
           "Reviews the developer's work against spec and roadmap. Use during review phase.",
-        prompt: `You are the reviewer. Audit the diff against spec/SPEC.md and AGENTS.md.
-Output the review-verdict block. OVERALL: PASS only if all six criteria pass (including 6_git_safety).
+        prompt: `You are the reviewer. Audit the working tree against spec/SPEC.md and AGENTS.md.
+PASS verification on host-runnable tests only; uncommitted work is OK; verify claims by reading files.
+Output the review-verdict block. OVERALL: PASS only if all six criteria pass.
 Do not edit code or spec. ${GIT_POLICY_SUBAGENT}`,
         model: "inherit",
       },
       overseer: {
         description:
-          "Meta alignment: failure patterns, spec drift, roadmap/Progress fixes. Use during overseer phase.",
-        prompt: `You are the overseer. Analyze orchestrator history for repeated failures and spec drift.
-Edit spec/SPEC.md when needed. ## Agent steering is optional — add only for concrete corrective guidance; clear it when the team is aligned.
-Emit the overseer-verdict block. Do not edit source code. ${GIT_POLICY_SUBAGENT}`,
+          "Meta alignment: failure patterns, spec drift, checkbox backtracking, roadmap/Progress fixes. Use during overseer phase.",
+        prompt: `You are the overseer. Analyze history and files for drift; backtrack misaligned Roadmap/Progress checkboxes when evidence is clear.
+Edit spec/SPEC.md when needed. Agent steering is optional — add only for concrete corrective guidance; clear when aligned.
+Emit overseer-verdict. Do not edit source code. ${GIT_POLICY_SUBAGENT}`,
         model: "inherit",
       },
     },

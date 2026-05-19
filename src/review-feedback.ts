@@ -1,4 +1,5 @@
 import type { CycleRecord } from "./types.js";
+import { REVIEW_FAIL_WORKFLOW_NOTE } from "./workflow-policy.js";
 
 export function isReviewFail(summary?: string): boolean {
   if (!summary?.trim()) {
@@ -29,6 +30,8 @@ export function formatFailedReviewForDevelop(record: CycleRecord): string {
     `The reviewer rejected the last implementation (run \`${record.runId}\`, cycle ${record.cycle}).`,
     "Address **every** blocking issue and criterion below until the work would earn **OVERALL: PASS**.",
     "Re-work the **same** task in **## Progress** — do not move on to a different roadmap ID.",
+    "",
+    REVIEW_FAIL_WORKFLOW_NOTE,
     "",
     body,
   ].join("\n");

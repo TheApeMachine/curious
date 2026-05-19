@@ -9,6 +9,7 @@ import {
   shouldDiscoverParents,
   slugFromPath,
 } from "./project.js";
+import { hostArchLabel, isArm64Host } from "./workflow-policy.js";
 import type { CuriousConfig, RuntimeKind } from "./types.js";
 
 function defaultConfig(projectRoot: string, specPath: string): CuriousConfig {
@@ -158,6 +159,10 @@ export function printConfigSummary(config: ResolvedConfig): void {
   console.log(`[curious] spec: ${config.specPath}${config.hasSpec ? "" : " (will be created)"}`);
   console.log(`[curious] agent cwd: ${config.cwd}`);
   console.log(`[curious] model: ${config.model.id} (fixed)`);
+  console.log(
+    `[curious] host: ${hostArchLabel()} (verify on this arch only${isArm64Host() ? "; amd64-tagged tests N/A" : ""})`,
+  );
+  console.log("[curious] commits: human only (agents must not git commit)");
   if (config.overseerEveryNCycles > 0 || config.overseerOnReviewFailStreak > 0) {
     const parts: string[] = [];
     if (config.overseerEveryNCycles > 0) {
