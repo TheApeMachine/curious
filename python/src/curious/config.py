@@ -21,6 +21,8 @@ from curious.types import (
     ResolvedConfig,
     TrainConfig,
     VerifierConfig,
+    VastConfig,
+    VastGpuProfile,
 )
 
 HF_DEFAULT_MODEL = "Qwen/Qwen3-Coder-Next"
@@ -81,6 +83,49 @@ def _merge_dict(base: dict, override: dict) -> dict:
     return out
 
 
+def _parse_vast_dict(vast_raw: dict) -> dict:
+    profiles: dict[str, VastGpuProfile] = {}
+    for name, prof in (vast_raw.get("profiles") or {}).items():
+        if not isinstance(prof, dict):
+            continue
+        profiles[name] = VastGpuProfile(
+            min_gpu_ram_gb=float(
+                prof.get("minGpuRamGb", prof.get("min_gpu_ram_gb", 24))
+            ),
+            min_cuda_major=int(
+                prof.get("minCudaMajor", prof.get("min_cuda_major", 12))
+            ),
+            max_dph=float(prof.get("maxDph", prof.get("max_dph", 1.5))),
+            disk_gb=int(prof.get("diskGb", prof.get("disk_gb", 80))),
+            preferred_gpus=list(
+                prof.get("preferredGpus", prof.get("preferred_gpus", []))
+            )
+            or ["RTX_4090", "RTX_3090"],
+        )
+    default_enabled = bool(os.environ.get("VAST_API_KEY") or os.environ.get("VASTAI_API_KEY"))
+    return {
+        "enabled": vast_raw.get("enabled", default_enabled),
+        "api_key": vast_raw.get("apiKey", vast_raw.get("api_key")),
+        "interruptible": vast_raw.get("interruptible", True),
+        "max_dph": float(vast_raw.get("maxDph", vast_raw.get("max_dph", 1.5))),
+        "disk_gb": vast_raw.get("diskGb", vast_raw.get("disk_gb")),
+        "image": vast_raw.get(
+            "image", "pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime"
+        ),
+        "label_prefix": vast_raw.get(
+            "labelPrefix", vast_raw.get("label_prefix", "curious-train")
+        ),
+        "auto_destroy": vast_raw.get("autoDestroy", vast_raw.get("auto_destroy", True)),
+        "ssh_timeout_sec": int(
+            vast_raw.get("sshTimeoutSec", vast_raw.get("ssh_timeout_sec", 600))
+        ),
+        "train_timeout_sec": int(
+            vast_raw.get("trainTimeoutSec", vast_raw.get("train_timeout_sec", 86_400))
+        ),
+        "profiles": profiles,
+    }
+
+
 def _parse_llm_dict(llm_raw: dict) -> dict:
     return {
         "provider": llm_raw.get("provider")
@@ -122,6 +167,7 @@ def _config_from_file_data(data: dict, resolve_relative_to: Path) -> dict:
     harvest_raw = data.get("harvest")
     verifier_raw = data.get("verifier", {})
     bon_raw = harness_raw.get("bestOfN", harness_raw.get("best_of_n", {}))
+    vast_raw = data.get("vast", {})
 
     return {
         "spec_path": str(spec_path.resolve()),
@@ -178,6 +224,7 @@ def _config_from_file_data(data: dict, resolve_relative_to: Path) -> dict:
         ),
         "harvest": harvest_raw,
         "train": data.get("train"),
+        "vast": _parse_vast_dict(vast_raw) if vast_raw else _parse_vast_dict({}),
     }
 
 
@@ -208,6 +255,7 @@ def _dict_to_config(d: dict) -> CuriousConfig:
     bon_d = harness_d.get("best_of_n", {})
     harvest_d = d.get("harvest")
     train_d = d.get("train")
+    vast_d = d.get("vast", {})
     harvest = None
     if harvest_d:
         harvest = HarvestConfig(
@@ -252,6 +300,19 @@ def _dict_to_config(d: dict) -> CuriousConfig:
         )
     review_llm = _llm_from_dict(d["review_llm"]) if d.get("review_llm") else None
     overseer_llm = _llm_from_dict(d["overseer_llm"]) if d.get("overseer_llm") else None
+    vast = VastConfig(
+        enabled=bool(vast_d.get("enabled", False)),
+        api_key=vast_d.get("api_key") or os.environ.get("VAST_API_KEY"),
+        interruptible=bool(vast_d.get("interruptible", True)),
+        max_dph=float(vast_d.get("max_dph", 1.5)),
+        disk_gb=vast_d.get("disk_gb"),
+        image=str(vast_d.get("image", "pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime")),
+        label_prefix=str(vast_d.get("label_prefix", "curious-train")),
+        auto_destroy=bool(vast_d.get("auto_destroy", True)),
+        ssh_timeout_sec=int(vast_d.get("ssh_timeout_sec", 600)),
+        train_timeout_sec=int(vast_d.get("train_timeout_sec", 86_400)),
+        profiles=vast_d.get("profiles") or {},
+    )
     return CuriousConfig(
         spec_path=d["spec_path"],
         cwd=d["cwd"],
@@ -284,6 +345,7 @@ def _dict_to_config(d: dict) -> CuriousConfig:
         overseer_on_review_fail_streak=int(d.get("overseer_on_review_fail_streak", 2)),
         harvest=harvest,
         train=train,
+        vast=vast,
     )
 
 
@@ -350,6 +412,16 @@ def config_from_env() -> dict:
             "true",
             "yes",
         )
+    if os.environ.get("VAST_API_KEY"):
+        partial.setdefault("vast", {})["apiKey"] = os.environ["VAST_API_KEY"]
+    if os.environ.get("CURIOUS_VAST") is not None:
+        partial.setdefault("vast", {})["enabled"] = os.environ["CURIOUS_VAST"].lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+    if os.environ.get("CURIOUS_VAST_MAX_DPH"):
+        partial.setdefault("vast", {})["maxDph"] = float(os.environ["CURIOUS_VAST_MAX_DPH"])
     return partial
 
 
@@ -434,6 +506,7 @@ def resolve_config(
         overseer_on_review_fail_streak=config.overseer_on_review_fail_streak,
         harvest=config.harvest,
         train=config.train,
+        vast=config.vast,
         project_root=str(located.project_root),
         has_spec=located.has_spec,
     )
@@ -473,3 +546,10 @@ def print_config_summary(config: ResolvedConfig) -> None:
         print(f"[curious] overseer: {'; '.join(parts)}")
     else:
         print("[curious] overseer: disabled")
+    if config.vast and config.vast.enabled:
+        print(
+            f"[curious] vast: enabled (max ${config.vast.max_dph:.2f}/hr, "
+            f"interruptible={config.vast.interruptible})"
+        )
+    else:
+        print("[curious] vast: disabled (local training only)")

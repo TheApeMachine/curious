@@ -9,7 +9,8 @@ from curious.harvest.grpo import harvest_grpo_tasks
 from curious.project import AGENTS_FILENAME
 from curious.state import load_state
 from curious.train.grpo_reward import make_grpo_reward_fn
-from curious.types import TrainConfig
+from curious.types import ResolvedConfig, TrainConfig
+from curious.vast.dispatch import dispatch_training
 
 
 def _require_train() -> None:
@@ -66,8 +67,54 @@ def run_train_grpo(
     n_rollouts_per_task: int = 4,
     max_completion_length: int = 2048,
     num_epochs: int = 1,
+    force_local: bool = False,
+    force_vast: bool | None = None,
 ) -> None:
     """GRPO fine-tune with TRL — composite verifier + heuristic reward."""
+    config = resolve_config(config_path=config_path, require_spec=True)
+
+    def local() -> None:
+        _run_train_grpo_local(
+            config,
+            base_model=base_model,
+            tasks_file=tasks_file,
+            output_dir=output_dir,
+            n_rollouts_per_task=n_rollouts_per_task,
+            max_completion_length=max_completion_length,
+            num_epochs=num_epochs,
+        )
+
+    flags: dict = {"rollouts": n_rollouts_per_task, "epochs": num_epochs}
+    if tasks_file:
+        flags["tasks_file"] = tasks_file
+    if base_model:
+        flags["model"] = base_model
+    if output_dir:
+        flags["output"] = output_dir
+    flags["max_completion_length"] = max_completion_length
+
+    dispatch_training(
+        config,
+        kind="grpo",
+        label="grpo",
+        local_runner=local,
+        config_path=config_path,
+        force_local=force_local,
+        force_vast=force_vast,
+        train_flags=flags,
+    )
+
+
+def _run_train_grpo_local(
+    config: ResolvedConfig,
+    *,
+    base_model: str | None,
+    tasks_file: str | None,
+    output_dir: str | None,
+    n_rollouts_per_task: int,
+    max_completion_length: int,
+    num_epochs: int,
+) -> None:
     _require_train()
 
     from datasets import Dataset
@@ -75,7 +122,6 @@ def run_train_grpo(
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import GRPOConfig, GRPOTrainer
 
-    config = resolve_config(config_path=config_path, require_spec=True)
     train_cfg = config.train or TrainConfig()
     root = Path(config.project_root)
     out = Path(output_dir) if output_dir else root / train_cfg.grpo_output_dir

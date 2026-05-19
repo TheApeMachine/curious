@@ -62,6 +62,20 @@
     "enabled": false,
     "output": ".curious/harvest/"
   },
+  "vast": {
+    "enabled": false,
+    "apiKey": null,
+    "interruptible": true,
+    "maxDph": 1.25,
+    "image": "pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime",
+    "autoDestroy": true,
+    "profiles": {
+      "verifier": { "minGpuRamGb": 12, "maxDph": 0.45, "diskGb": 50 },
+      "dpo": { "minGpuRamGb": 40, "maxDph": 1.25, "diskGb": 120 },
+      "grpo": { "minGpuRamGb": 48, "maxDph": 1.75, "diskGb": 150 }
+    }
+  },
+  "_comment_vast": "Set VAST_API_KEY env (https://cloud.vast.ai/manage-keys/). Training auto-runs on cheapest matching offer unless --local.",
   "train": {
     "outputDir": ".curious/train/dpo",
     "loraR": 16,

@@ -6,7 +6,8 @@ from pathlib import Path
 
 from curious.config import HF_DEFAULT_MODEL, resolve_config
 from curious.train.dpo_format import completion_from_row, rejection_from_row
-from curious.types import TrainConfig
+from curious.types import ResolvedConfig, TrainConfig
+from curious.vast.dispatch import dispatch_training
 
 
 def _require_train() -> None:
@@ -41,8 +42,50 @@ def run_train_dpo(
     model_id: str | None = None,
     output_dir: str | None = None,
     min_quality: float = 0.5,
+    force_local: bool = False,
+    force_vast: bool | None = None,
 ) -> None:
-    """DPO fine-tune with [TRL](https://huggingface.co/docs/trl/index) + [PEFT](https://huggingface.co/docs/peft/index)."""
+    """DPO fine-tune with TRL + PEFT (local or Vast.ai)."""
+    config = resolve_config(config_path=config_path, require_spec=False)
+
+    def local() -> None:
+        _run_train_dpo_local(
+            config,
+            dataset_path=dataset_path,
+            model_id=model_id,
+            output_dir=output_dir,
+            min_quality=min_quality,
+        )
+
+    flags: dict = {}
+    if dataset_path:
+        flags["dataset"] = dataset_path
+    if model_id:
+        flags["model"] = model_id
+    if output_dir:
+        flags["output"] = output_dir
+    flags["min_quality"] = min_quality
+
+    dispatch_training(
+        config,
+        kind="dpo",
+        label="dpo",
+        local_runner=local,
+        config_path=config_path,
+        force_local=force_local,
+        force_vast=force_vast,
+        train_flags=flags,
+    )
+
+
+def _run_train_dpo_local(
+    config: ResolvedConfig,
+    *,
+    dataset_path: str | None,
+    model_id: str | None,
+    output_dir: str | None,
+    min_quality: float,
+) -> None:
     _require_train()
 
     from datasets import Dataset
@@ -50,7 +93,6 @@ def run_train_dpo(
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import DPOConfig, DPOTrainer
 
-    config = resolve_config(config_path=config_path, require_spec=False)
     train_cfg = config.train or TrainConfig()
     project_root = Path(config.project_root)
 

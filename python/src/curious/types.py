@@ -76,6 +76,37 @@ class HarvestConfig:
 
 
 @dataclass
+class VastGpuProfile:
+    min_gpu_ram_gb: float = 24.0
+    min_cuda_major: int = 12
+    max_dph: float = 2.0
+    disk_gb: int = 80
+    preferred_gpus: list[str] = field(
+        default_factory=lambda: [
+            "RTX_4090",
+            "RTX_3090",
+            "L40",
+            "A6000",
+        ]
+    )
+
+
+@dataclass
+class VastConfig:
+    enabled: bool = True
+    api_key: str | None = None
+    interruptible: bool = True
+    max_dph: float = 1.5
+    disk_gb: int | None = None
+    image: str = "pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime"
+    label_prefix: str = "curious-train"
+    auto_destroy: bool = True
+    ssh_timeout_sec: int = 600
+    train_timeout_sec: int = 86_400
+    profiles: dict[str, VastGpuProfile] = field(default_factory=dict)
+
+
+@dataclass
 class TrainConfig:
     output_dir: str = ".curious/train/dpo"
     lora_r: int = 16
@@ -107,6 +138,7 @@ class CuriousConfig:
     overseer_on_review_fail_streak: int = 2
     harvest: HarvestConfig | None = None
     train: TrainConfig | None = None
+    vast: VastConfig | None = None
 
     def llm_for_phase(self, phase: Phase) -> LlmConfig:
         if phase == "review" and self.review_llm is not None:

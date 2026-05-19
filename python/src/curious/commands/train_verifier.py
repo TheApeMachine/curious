@@ -6,7 +6,8 @@ from pathlib import Path
 
 from curious.config import VERIFIER_DEFAULT_MODEL, resolve_config
 from curious.train.verifier_checkpoint import save_verifier_checkpoint
-from curious.types import CRITERION_KEYS, TrainConfig
+from curious.types import CRITERION_KEYS, ResolvedConfig, TrainConfig
+from curious.vast.dispatch import dispatch_training
 from curious.verifier.architecture import build_verifier_model
 
 
@@ -26,6 +27,45 @@ def run_train_verifier(
     base_model: str | None = None,
     dataset_path: str | None = None,
     output_dir: str | None = None,
+    force_local: bool = False,
+    force_vast: bool | None = None,
+) -> None:
+    config = resolve_config(config_path=config_path, require_spec=False)
+
+    def local() -> None:
+        _run_train_verifier_local(
+            config,
+            base_model=base_model,
+            dataset_path=dataset_path,
+            output_dir=output_dir,
+        )
+
+    flags: dict = {}
+    if dataset_path:
+        flags["dataset"] = dataset_path
+    if base_model:
+        flags["model"] = base_model
+    if output_dir:
+        flags["output"] = output_dir
+
+    dispatch_training(
+        config,
+        kind="verifier",
+        label="verifier",
+        local_runner=local,
+        config_path=config_path,
+        force_local=force_local,
+        force_vast=force_vast,
+        train_flags=flags,
+    )
+
+
+def _run_train_verifier_local(
+    config: ResolvedConfig,
+    *,
+    base_model: str | None,
+    dataset_path: str | None,
+    output_dir: str | None,
 ) -> None:
     _require_train()
 
@@ -33,7 +73,6 @@ def run_train_verifier(
     from torch.utils.data import Dataset
     from transformers import Trainer, TrainingArguments
 
-    config = resolve_config(config_path=config_path, require_spec=False)
     train_cfg = config.train or TrainConfig()
     root = Path(config.project_root)
 
