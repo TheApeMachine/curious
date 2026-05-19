@@ -157,7 +157,7 @@ Optional `curious.config.json` at the project root:
 
 ```json
 {
-  "cwd": "workspace",
+  "cwd": ".",
   "runtime": "local",
   "cycleDelayMs": 30000,
   "maxCycles": 0,
@@ -188,21 +188,6 @@ All agent runs use **Composer 2.5** (`composer-2.5`). The model is fixed and can
 | `CURIOUS_AGENT_ID` | Override stable agent id |
 | `CURIOUS_CYCLE_DELAY_MS` | Delay between cycles |
 | `CURIOUS_MAX_CYCLES` | Max develop→review→sync rounds (`0` = unlimited) |
-
-## This repo (compute kernels example)
-
-`curious.config.json` points the agent at the Go workspace:
-
-```json
-{ "cwd": "workspace" }
-```
-
-```bash
-export CURSOR_API_KEY="..."
-npm run bootstrap    # refresh spec if needed
-npm run roadmap
-npm run run          # until workspace roadmap is complete
-```
 
 ## Troubleshooting
 
