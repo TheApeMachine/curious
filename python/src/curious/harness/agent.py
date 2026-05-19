@@ -17,6 +17,7 @@ def run_harness(
     harness: HarnessConfig,
     *,
     verbose: bool = False,
+    required_paths: list[Path] | None = None,
 ) -> HarnessResult:
     run_id = f"run-{uuid.uuid4().hex[:12]}"
     llm = resolve_llm_for_harness(llm)
@@ -38,4 +39,5 @@ def run_harness(
         llm,
         harness,
         verbose=verbose,
+        required_paths=required_paths,
     )

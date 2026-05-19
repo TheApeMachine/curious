@@ -16,6 +16,7 @@ pip install -e .
 pip install -e '.[transformers]'   # Transformers weights, native tool loop
 pip install -e '.[smolagents]'     # smolagents agent + TransformersModel
 pip install -e '.[train]'          # TRL DPO + PEFT LoRA
+pip install -e '.[train,vast]'     # + Vast.ai remote GPU training
 pip install -e '.[litellm]'        # optional hosted APIs
 pip install -e '.[all]'            # everything
 ```
@@ -109,19 +110,42 @@ After fine-tuning, serve your adapter with **vLLM** (or Ollama) and point `baseU
 |---------|---------|
 | `curious-py hf download …` | [huggingface_hub](https://huggingface.co/docs/huggingface_hub/index) |
 | `curious-py train dpo` | [TRL](https://huggingface.co/docs/trl/index) + [PEFT](https://huggingface.co/docs/peft/index) |
+| `curious-py train verifier \| grpo \| reviewer` | Same stack; GRPO uses composite verifier reward |
 
 ```bash
-pip install -e '.[smolagents,train]'
+pip install -e '.[smolagents,train,vast]'
 curious-py hf download Qwen/Qwen3-Coder-30B-A3B-Instruct -o ./models/qwen3-coder-30b
 curious-py run --cycle
 curious-py harvest --format dpo
 curious-py train dpo --model Qwen/Qwen3-Coder-30B-A3B-Instruct
 ```
 
+### Vast.ai (automatic, cost-optimized GPU training)
+
+Uses the official [Vast.ai Python SDK](https://github.com/vast-ai/vast-sdk) (`pip install vastai`, included via `curious-py[vast]`). The legacy `vast-sdk` repo is deprecated; install `vastai` from [vast-cli](https://github.com/vast-ai/vast-cli).
+
+1. Create an API key at [cloud.vast.ai/manage-keys](https://cloud.vast.ai/manage-keys/).
+2. Export `VAST_API_KEY` (training auto-enables when this is set; override with `vast.enabled` in config).
+3. Run any train command — Curious picks the **cheapest** verified offer under your `maxDph` cap, uses **interruptible** bids at ~97% of spot price, uploads a project bundle, runs `curious-py train <kind> --local` on the instance, syncs `.curious/train` back, and **destroys** the instance.
+
+```bash
+export VAST_API_KEY="..."
+# Optional caps
+export CURIOUS_VAST_MAX_DPH=1.25
+
+curious-py vast offers --kind dpo    # preview cheapest GPUs
+curious-py train dpo                 # remote by default when VAST_API_KEY is set
+curious-py train grpo --local        # force laptop / local GPU
+curious-py train dpo --vast          # force Vast even if disabled in config
+curious-py vast stop                 # destroy leftover curious-train instances
+```
+
+Per-job GPU profiles (`verifier`, `dpo`, `grpo`, `reviewer`) live under `vast.profiles` in `curious.config.json` — see `curious.config.example.json`. Set `HF_TOKEN` when uploading gated models.
+
 ## Commands
 
 ```bash
-curious-py init | bootstrap | roadmap | run [--cycle] | status | reset | harvest | train dpo | hf
+curious-py init | bootstrap | roadmap | run [--cycle] | status | reset | harvest | train | vast | hf
 ```
 
 ## Harness tools

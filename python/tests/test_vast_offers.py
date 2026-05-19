@@ -29,3 +29,12 @@ def test_build_search_query_includes_ram() -> None:
     q = build_search_query(VastGpuProfile(min_gpu_ram_gb=40), interruptible=True)
     assert "gpu_ram>=" in q
     assert "verified=true" in q
+
+
+def test_build_search_query_gpu_names_comma_separated() -> None:
+    q = build_search_query(
+        VastGpuProfile(preferred_gpus=["RTX_4090", "RTX_3090"]),
+        interruptible=True,
+    )
+    assert "gpu_name in [RTX_4090,RTX_3090]" in q
+    assert "RTX_4090 RTX_3090" not in q

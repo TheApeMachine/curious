@@ -286,20 +286,27 @@ class Orchestrator:
                     save_rules(root, existing + new_rules)
                 overseer_intervened = True
 
+        diff_at_review: str | None = None
+        if phase == "review" and status == "finished":
+            from curious.git_diff import capture_diff_at_review
+
+            diff_at_review = capture_diff_at_review(
+                self.config.project_root, self.config.cwd
+            )
+
         if (
             phase == "review"
             and status == "finished"
             and self.config.verifier.enabled
             and summary
+            and diff_at_review
         ):
             try:
-                from curious.harvest.verifier import _git_diff
-
                 verifier = load_verifier(
                     self.config.verifier.model_path,
                     self.config.verifier.base_model,
                 )
-                diff = _git_diff(self.config.project_root, self.config.cwd)
+                diff = diff_at_review
                 scores = verifier.score(
                     diff=diff,
                     spec_section=spec_section,
@@ -330,6 +337,7 @@ class Orchestrator:
             spec_snapshot_sha=spec_sha,
             agents_snapshot_sha=agents_sha,
             overseer_intervened=overseer_intervened,
+            diff_at_review=diff_at_review,
         )
         state.history.append(record)
         if len(state.history) > 100:

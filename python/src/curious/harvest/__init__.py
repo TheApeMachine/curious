@@ -32,8 +32,10 @@ def resolve_harvest_output(
 
     if str(resolved).endswith(("/", "\\")):
         return resolved / f"{fmt}.jsonl"
-    if resolved.suffix in ("", ".jsonl"):
-        return resolved if resolved.suffix else resolved / f"{fmt}.jsonl"
+    if resolved.suffix == ".jsonl":
+        return resolved
+    if resolved.suffix == "":
+        return resolved / f"{fmt}.jsonl"
     return resolved
 
 

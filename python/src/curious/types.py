@@ -161,6 +161,7 @@ class CycleRecord:
     spec_snapshot_sha: str | None = None
     agents_snapshot_sha: str | None = None
     overseer_intervened: bool = False
+    diff_at_review: str | None = None
 
     def to_json(self) -> dict:
         out: dict = {
@@ -181,6 +182,8 @@ class CycleRecord:
             out["agentsSnapshotSha"] = self.agents_snapshot_sha
         if self.overseer_intervened:
             out["overseerIntervened"] = True
+        if self.diff_at_review:
+            out["diffAtReview"] = self.diff_at_review
         return out
 
     @classmethod
@@ -200,6 +203,7 @@ class CycleRecord:
             spec_snapshot_sha=data.get("specSnapshotSha"),
             agents_snapshot_sha=data.get("agentsSnapshotSha"),
             overseer_intervened=bool(data.get("overseerIntervened")),
+            diff_at_review=data.get("diffAtReview"),
         )
 
 
@@ -231,7 +235,7 @@ class CuriousState:
         version = data.get("version", 1)
         history = [CycleRecord.from_json(item) for item in data.get("history", [])]
         return cls(
-            version=version if version >= 2 else 1,
+            version=int(version),
             phase=data.get("phase", "develop"),
             cycle=data.get("cycle", 0),
             running=data.get("running", False),

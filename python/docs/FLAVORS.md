@@ -51,6 +51,10 @@ GRPO reward = `0.65 × verifier + 0.25 × heuristics − scanner penalties` (see
 
 After GRPO, set `llm.adapterPath` to `.curious/train/grpo` and `llm.provider` to `transformers`.
 
+### Remote training (Vast.ai)
+
+All `curious-py train …` commands support automatic Vast.ai execution when `VAST_API_KEY` is set: cheapest matching GPU, interruptible spot bid, bundle upload, remote `--local` train, artifact sync to `.curious/train`, instance teardown. Use `--local` / `--vast` to override. See [python/README.md](../README.md#vastai-automatic-cost-optimized-gpu-training).
+
 ## Phase 4 — Split models & reviewer harvest
 
 ```json
