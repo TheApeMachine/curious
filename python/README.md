@@ -84,6 +84,8 @@ After fine-tuning, serve your adapter with **vLLM** (or Ollama) and point `baseU
 | Provider | Library | Install | `model` field |
 |----------|---------|---------|---------------|
 | **`openai_compat`** | stdlib HTTP | core | Ollama tag, e.g. `qwen3-coder:30b` |
+
+**Ollama not running?** With `pip install 'curious-py[transformers]'`, the default config auto-falls back to in-process Transformers and downloads `fallbackModel` (default `Qwen/Qwen3-Coder-30B-A3B-Instruct`) from Hugging Face when `http://127.0.0.1:11434` refuses connections. Set `llm.fallbackToTransformers: false` to disable.
 | **`transformers`** | [Transformers](https://huggingface.co/docs/transformers/index) | `[transformers]` | HF repo id |
 | **`smolagents`** | [smolagents](https://huggingface.co/docs/smolagents/index) | `[smolagents]` | HF repo id |
 | **`litellm`** | LiteLLM | `[litellm]` | e.g. `openai/gpt-5.5` |

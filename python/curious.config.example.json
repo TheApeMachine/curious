@@ -18,8 +18,11 @@
     "device": "auto",
     "loadIn4bit": false,
     "trustRemoteCode": true,
-    "smolagentsAgentType": "tool-calling"
+    "smolagentsAgentType": "tool-calling",
+    "fallbackToTransformers": true,
+    "fallbackModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct"
   },
+  "_comment_llm_fallback": "When baseUrl (Ollama/vLLM) is unreachable, load fallbackModel via transformers — requires: pip install curious-py[transformers]",
   "_comment_llm_providers": {
     "openai_compat": "Ollama / vLLM — model is server tag, e.g. qwen3-coder:30b",
     "transformers": "pip install curious-py[transformers] — model is HF repo id",

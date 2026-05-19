@@ -111,6 +111,11 @@ def _config_from_file_data(data: dict, resolve_relative_to: Path) -> dict:
                 "smolagentsAgentType",
                 llm_raw.get("smolagents_agent_type", "tool-calling"),
             ),
+            "fallback_to_transformers": llm_raw.get(
+                "fallbackToTransformers",
+                llm_raw.get("fallback_to_transformers", True),
+            ),
+            "fallback_model": llm_raw.get("fallbackModel", llm_raw.get("fallback_model")),
         },
         "harness": {
             "max_turns": harness_raw.get("maxTurns", harness_raw.get("max_turns", 80)),
@@ -193,6 +198,8 @@ def _dict_to_config(d: dict) -> CuriousConfig:
             load_in_4bit=bool(llm_d.get("load_in_4bit", False)),
             trust_remote_code=bool(llm_d.get("trust_remote_code", True)),
             smolagents_agent_type=llm_d.get("smolagents_agent_type", "tool-calling"),  # type: ignore[arg-type]
+            fallback_to_transformers=bool(llm_d.get("fallback_to_transformers", True)),
+            fallback_model=llm_d.get("fallback_model"),
         ),
         harness=HarnessConfig(
             max_turns=int(harness_d.get("max_turns", 80)),
@@ -250,6 +257,12 @@ def config_from_env() -> dict:
         partial.setdefault("llm", {})["apiKey"] = os.environ["LLM_API_KEY"]
     if os.environ.get("LLM_BASE_URL"):
         partial.setdefault("llm", {})["baseUrl"] = os.environ["LLM_BASE_URL"]
+    if os.environ.get("CURIOUS_FALLBACK_TO_TRANSFORMERS") is not None:
+        partial.setdefault("llm", {})["fallbackToTransformers"] = os.environ[
+            "CURIOUS_FALLBACK_TO_TRANSFORMERS"
+        ].lower() in ("1", "true", "yes")
+    if os.environ.get("CURIOUS_FALLBACK_MODEL"):
+        partial.setdefault("llm", {})["fallbackModel"] = os.environ["CURIOUS_FALLBACK_MODEL"]
     if os.environ.get("CURIOUS_CYCLE_DELAY_MS"):
         partial["cycleDelayMs"] = int(os.environ["CURIOUS_CYCLE_DELAY_MS"])
     if os.environ.get("CURIOUS_MAX_CYCLES"):

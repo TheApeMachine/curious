@@ -33,6 +33,9 @@ class LlmConfig:
     load_in_4bit: bool = False
     trust_remote_code: bool = True
     smolagents_agent_type: SmolagentsAgentType = "tool-calling"
+    # When openai_compat points at localhost and nothing is listening, use transformers.
+    fallback_to_transformers: bool = True
+    fallback_model: str | None = None  # HF repo id; default maps Ollama tags → HF_DEFAULT_MODEL
 
 
 @dataclass
