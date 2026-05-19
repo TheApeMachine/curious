@@ -15,6 +15,11 @@ import {
   isAgentBusyError,
   isTransientError,
 } from "./transient-errors.js";
+import {
+  overseerTriggerReason,
+  shouldRunOverseer,
+} from "./overseer.js";
+import { agentSteeringForPhase } from "./spec-steering.js";
 import { analyzeRoadmap } from "./spec-roadmap.js";
 import { initialState, loadState, nextPhase, saveState } from "./state.js";
 import type { CuriousConfig, CuriousState, CycleRecord, Phase } from "./types.js";
@@ -183,8 +188,19 @@ export class Orchestrator {
       console.warn(
         "[curious] warning: no AGENTS.md at project root or agent cwd — developer will lack style guidelines",
       );
-    } else if (agents && (phase === "develop" || phase === "review")) {
+    } else if (
+      agents &&
+      (phase === "develop" || phase === "review" || phase === "overseer")
+    ) {
       console.log(`[curious] including AGENTS.md (${agents.relPath}) in prompt`);
+    }
+
+    if (phase === "overseer") {
+      console.log(
+        `[curious] overseer triggered: ${overseerTriggerReason(state, this.config)}`,
+      );
+    } else if (agentSteeringForPhase(specBody, phase)) {
+      console.log(`[curious] injecting Agent steering into ${phase} prompt`);
     }
 
     const prompt = buildPrompt({
@@ -197,6 +213,7 @@ export class Orchestrator {
       projectRoot: this.config.projectRoot,
       agents,
       lastSummary: this.lastSummary,
+      history: state.history,
     });
 
     console.log(`\n[curious] ── cycle ${state.cycle} · ${phase} ──`);
@@ -331,9 +348,13 @@ export class Orchestrator {
     state.lastRunId = runId || state.lastRunId;
 
     if (status === "finished") {
-      state.phase = nextPhase(phase);
       if (phase === "sync") {
         state.cycle += 1;
+        state.phase = shouldRunOverseer(state, this.config)
+          ? "overseer"
+          : nextPhase("sync");
+      } else {
+        state.phase = nextPhase(phase);
       }
     } else {
       console.log(`[curious] staying on phase "${phase}" until a run finishes successfully`);
@@ -441,6 +462,8 @@ export class Orchestrator {
       console.log("[curious] tip: npm run review  OR  npm run run:cycle");
     } else if (state.phase === "sync") {
       console.log("[curious] tip: npm run sync  OR  npm run run:cycle");
+    } else if (state.phase === "overseer") {
+      console.log("[curious] tip: curious run  OR  npm run run");
     } else if (state.phase === "develop") {
       console.log("[curious] tip: npm run develop  OR  npm run run:cycle");
     }

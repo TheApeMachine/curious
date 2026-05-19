@@ -13,7 +13,7 @@ function printHelp(): void {
 Workflow:
   1. bootstrap   Agent explores repo → writes spec/SPEC.md
   2. roadmap     Agent expands spec → checkable Roadmap + Progress tasks
-  3. run         Developer → Reviewer → Sync (repeat per roadmap task)
+  3. run         Developer → Reviewer → Sync → Overseer (periodic) → …
 
 Commands:
   curious bootstrap [--verbose]
@@ -26,7 +26,7 @@ Run modes (curious run):
   --continuous        Same loop, stop only with Ctrl+C
   --cycle             One full cycle, then stop (alias for --cycles 1)
   --cycles N          N full cycles, then stop
-  --once              Single phase only (develop OR review OR sync)
+  --once              Single phase only (develop, review, sync, or overseer)
 
 Examples:
   curious run                 # through the full roadmap, then exit

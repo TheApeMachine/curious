@@ -3,7 +3,7 @@ export interface ModelSelection {
   params?: Array<{ id: string; value: string }>;
 }
 
-export type Phase = "develop" | "review" | "sync";
+export type Phase = "develop" | "review" | "sync" | "overseer";
 
 export type RuntimeKind = "local" | "cloud";
 
@@ -23,6 +23,10 @@ export interface CuriousConfig {
   cycleDelayMs: number;
   /** Stop after this many full develop→review→sync cycles (0 = unlimited). */
   maxCycles: number;
+  /** Run overseer after sync every N completed task cycles (0 = disable interval). */
+  overseerEveryNCycles: number;
+  /** Run overseer when this many consecutive review FAILs occur (0 = disable). */
+  overseerOnReviewFailStreak: number;
   /** Load .cursor project settings (MCP, agents, hooks). */
   settingSources?: Array<"project" | "user" | "team" | "mdm" | "plugins" | "all">;
   cloud?: {

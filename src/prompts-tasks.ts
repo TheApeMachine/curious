@@ -22,6 +22,8 @@ Write or update the file with these sections (in order):
 8. **## Constraints** — tech, style, non-goals (from AGENTS.md when present)
 9. **## Open questions** — unresolved decisions
 
+Do **not** add **## Agent steering** unless the project already needs it — the overseer creates that section only when corrective guidance is required.
+
 ### Roadmap schema (required)
 
 \`\`\`markdown

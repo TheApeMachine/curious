@@ -1,3 +1,5 @@
+import { extractSpecSection } from "./spec-sections.js";
+
 /** Task IDs used in ## Roadmap (T1.1, M0, …). */
 const ROADMAP_TASK_LINE =
   /^\s*-\s+\[([ xX])\]\s+((?:T\d+\.\d+|M\d+)\b)/;
@@ -10,19 +12,9 @@ export interface RoadmapStatus {
   complete: boolean;
 }
 
-function extractSection(body: string, heading: string): string | null {
-  const start = body.match(new RegExp(`^${heading}\\s*$`, "m"));
-  if (!start || start.index === undefined) return null;
-
-  const after = body.slice(start.index + start[0].length);
-  const next = after.match(/^## /m);
-  const section = next?.index !== undefined ? after.slice(0, next.index) : after;
-  return section;
-}
-
 /** Parse ## Roadmap checkboxes (T* / M* task IDs). */
 export function analyzeRoadmap(specBody: string): RoadmapStatus {
-  const section = extractSection(specBody, "## Roadmap");
+  const section = extractSpecSection(specBody, "## Roadmap");
   if (!section) {
     return {
       totalTasks: 0,

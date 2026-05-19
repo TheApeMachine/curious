@@ -1,6 +1,6 @@
 # curious
 
-Portable **spec-driven** agent workflow on the [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript). Point it at any repo: an agent bootstraps a living spec, plans a roadmap, then implements tasks in a **develop → review → sync** loop until the roadmap is done.
+Portable **spec-driven** agent workflow on the [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript). Point it at any repo: an agent bootstraps a living spec, plans a roadmap, then implements tasks in a **develop → review → sync** loop (with periodic **overseer** meta-review) until the roadmap is done.
 
 ## How it works
 
@@ -13,7 +13,7 @@ curious bootstrap  →  curious roadmap  →  curious run
 |------|---------------------|--------------------------------------------------------------------------------------------------------------------------------------|
 | 1    | `curious bootstrap` | Explores README, AGENTS.md, and code → writes `spec/SPEC.md`                                                                         |
 | 2    | `curious roadmap`   | Expands the spec into phased **Roadmap** + **Progress** checkboxes                                                                   |
-| 3    | `curious run`       | **Developer** implements one task → **Reviewer** audits → **Sync** updates the spec; repeats until every roadmap task is checked off |
+| 3    | `curious run`       | **Developer** → **Reviewer** → **Sync** per task; **Overseer** periodically realigns the spec; repeats until the roadmap is done |
 
 You refine the spec after bootstrap. The loop reads **Progress** for the next task and checks off **Roadmap** when review passes.
 
@@ -24,6 +24,20 @@ You refine the spec after bootstrap. The loop reads **Progress** for the next ta
 | **develop** | Developer | One unchecked **Progress** task (lowest ID); writes code and tests; does not edit the spec                                 |
 | **review**  | Reviewer  | Audits the diff; outputs a `review-verdict` block (five criteria + **OVERALL: PASS/FAIL**)                                 |
 | **sync**    | Sync      | On PASS: checks off **Roadmap** / **Progress**, updates **Orchestrator log**; on FAIL: records blockers, leaves tasks open |
+| **overseer** | Overseer | Meta-review: failure patterns, spec alignment; may edit Roadmap/Progress; **optionally** adds **Agent steering** when something needs correction; no code |
+
+After **sync** completes a task cycle, **overseer** may run before the next **develop** when:
+
+- Every **N** completed task cycles (`overseerEveryNCycles`, default **5**), or
+- **2** consecutive **review** FAILs (`overseerOnReviewFailStreak`, default **2**)
+
+Set either interval to `0` in `curious.config.json` to disable that trigger.
+
+### Agent steering (optional, exception-only)
+
+When the overseer finds **concrete** problems (repeated review FAILs, drift, wrong focus), it may add **`## Agent steering`** to the spec with `### Developer`, `### Reviewer`, and/or `### Sync` bullets. Curious injects only **actionable** bullets into that phase’s prompt (above AGENTS.md).
+
+When the team is healthy, the overseer leaves steering empty or clears it — **no injection**, and develop/review/sync run from the spec and AGENTS.md as usual. Steering is the exception, not a standing requirement.
 
 State (current phase, cycle, run history) lives in `.curious/state.json`. A durable Cursor agent (`agent-curious-<project>`) is created once and resumed on later runs.
 
@@ -75,7 +89,7 @@ Run commands from the **project root** — the directory that contains `spec/SPE
 ```text
 my-project/
   README.md
-  AGENTS.md              # optional; inlined in develop/review prompts
+  AGENTS.md              # optional; inlined in develop/review/overseer prompts
   spec/SPEC.md           # living spec (required after bootstrap)
   curious.config.json    # optional
   .curious/state.json    # phase, cycle, history
@@ -94,7 +108,7 @@ Optional: `CURIOUS_DISCOVER=parents` to search parent directories for a spec (of
 | Continuous               | `curious run --continuous` | You press Ctrl+C (ignores roadmap completion)     |
 | One task                 | `curious run --cycle`      | One develop → review → sync round                 |
 | N tasks                  | `curious run --cycles 5`   | Five full rounds                                  |
-| Single phase             | `curious run --once`       | Current phase only (develop, review, or sync)     |
+| Single phase             | `curious run --once`       | Current phase only (develop, review, sync, or overseer) |
 
 Examples:
 
@@ -161,18 +175,22 @@ Optional `curious.config.json` at the project root:
   "runtime": "local",
   "cycleDelayMs": 0,
   "maxCycles": 0,
+  "overseerEveryNCycles": 5,
+  "overseerOnReviewFailStreak": 2,
   "settingSources": ["project"]
 }
 ```
 
-| Field            | Description                                                                         |
-|------------------|-------------------------------------------------------------------------------------|
-| `cwd`            | Agent working directory (relative to project root). Spec stays at `./spec/SPEC.md`. |
-| `runtime`        | `local` or `cloud`                                                                  |
-| `cycleDelayMs`   | Pause between completed cycles in ms (default `0`)                                  |
-| `maxCycles`      | Stop after N full rounds (`0` = no limit)                                           |
-| `settingSources` | Cursor settings to load (e.g. project MCP, agents)                                  |
-| `agentId`        | Stable agent id (auto-derived from project name if omitted)                         |
+| Field                      | Description                                                                         |
+|----------------------------|-------------------------------------------------------------------------------------|
+| `cwd`                      | Agent working directory (relative to project root). Spec stays at `./spec/SPEC.md`. |
+| `runtime`                  | `local` or `cloud`                                                                  |
+| `cycleDelayMs`             | Pause between completed cycles in ms (default `0`)                                  |
+| `maxCycles`                | Stop after N full rounds (`0` = no limit)                                           |
+| `overseerEveryNCycles`     | Run overseer after every N completed task cycles (`0` = off)                        |
+| `overseerOnReviewFailStreak` | Run overseer after N consecutive review FAILs (`0` = off)                         |
+| `settingSources`           | Cursor settings to load (e.g. project MCP, agents)                                  |
+| `agentId`                  | Stable agent id (auto-derived from project name if omitted)                         |
 
 All agent runs use **Composer 2.5** (`composer-2.5`). The model is fixed and cannot be overridden via config or env.
 
@@ -188,6 +206,8 @@ All agent runs use **Composer 2.5** (`composer-2.5`). The model is fixed and can
 | `CURIOUS_AGENT_ID`       | Override stable agent id                         |
 | `CURIOUS_CYCLE_DELAY_MS` | Delay between cycles                             |
 | `CURIOUS_MAX_CYCLES`     | Max develop→review→sync rounds (`0` = unlimited) |
+| `CURIOUS_OVERSEER_EVERY_N_CYCLES` | Overseer interval (`0` = disable) |
+| `CURIOUS_OVERSEER_FAIL_STREAK` | Overseer after N review FAILs (`0` = disable) |
 
 ## Troubleshooting
 

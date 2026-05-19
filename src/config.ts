@@ -19,6 +19,8 @@ function defaultConfig(projectRoot: string, specPath: string): CuriousConfig {
     model: CURIOUS_MODEL,
     cycleDelayMs: 0,
     maxCycles: 0,
+    overseerEveryNCycles: 5,
+    overseerOnReviewFailStreak: 2,
     settingSources: ["project"],
     agentName: `curious-${slugFromPath(projectRoot)}`,
     agentId: `agent-curious-${slugFromPath(projectRoot)}`,
@@ -67,6 +69,14 @@ export function configFromEnv(): Partial<CuriousConfig> {
   }
   if (process.env.CURIOUS_MAX_CYCLES) {
     partial.maxCycles = Number(process.env.CURIOUS_MAX_CYCLES);
+  }
+  if (process.env.CURIOUS_OVERSEER_EVERY_N_CYCLES) {
+    partial.overseerEveryNCycles = Number(process.env.CURIOUS_OVERSEER_EVERY_N_CYCLES);
+  }
+  if (process.env.CURIOUS_OVERSEER_FAIL_STREAK) {
+    partial.overseerOnReviewFailStreak = Number(
+      process.env.CURIOUS_OVERSEER_FAIL_STREAK,
+    );
   }
   return partial;
 }
@@ -148,4 +158,16 @@ export function printConfigSummary(config: ResolvedConfig): void {
   console.log(`[curious] spec: ${config.specPath}${config.hasSpec ? "" : " (will be created)"}`);
   console.log(`[curious] agent cwd: ${config.cwd}`);
   console.log(`[curious] model: ${config.model.id} (fixed)`);
+  if (config.overseerEveryNCycles > 0 || config.overseerOnReviewFailStreak > 0) {
+    const parts: string[] = [];
+    if (config.overseerEveryNCycles > 0) {
+      parts.push(`every ${config.overseerEveryNCycles} task cycle(s)`);
+    }
+    if (config.overseerOnReviewFailStreak > 0) {
+      parts.push(`after ${config.overseerOnReviewFailStreak} review FAIL(s)`);
+    }
+    console.log(`[curious] overseer: ${parts.join("; ")}`);
+  } else {
+    console.log("[curious] overseer: disabled");
+  }
 }

@@ -54,6 +54,14 @@ Output the review-verdict block. OVERALL: PASS only if all five criteria pass.
 Do not edit code or spec.`,
         model: "inherit",
       },
+      overseer: {
+        description:
+          "Meta alignment: failure patterns, spec drift, roadmap/Progress fixes. Use during overseer phase.",
+        prompt: `You are the overseer. Analyze orchestrator history for repeated failures and spec drift.
+Edit spec/SPEC.md when needed. ## Agent steering is optional — add only for concrete corrective guidance; clear it when the team is aligned.
+Emit the overseer-verdict block. Do not edit source code.`,
+        model: "inherit",
+      },
     },
   };
 

@@ -47,5 +47,7 @@ export function nextPhase(current: Phase): Phase {
       return "sync";
     case "sync":
       return "develop";
+    case "overseer":
+      return "develop";
   }
 }

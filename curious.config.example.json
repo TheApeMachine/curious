@@ -5,6 +5,8 @@
   "runtime": "local",
   "cycleDelayMs": 0,
   "maxCycles": 0,
+  "overseerEveryNCycles": 5,
+  "overseerOnReviewFailStreak": 2,
   "settingSources": [
     "project"
   ]

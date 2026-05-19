@@ -24,6 +24,7 @@
     "develop": "tsx src/index.ts run --once",
     "review": "tsx src/index.ts run --once",
     "sync": "tsx src/index.ts run --once",
+    "overseer": "tsx src/index.ts run --once",
     "status": "tsx src/index.ts status",
     "inspect": "tsx src/index.ts inspect",
     "init": "tsx src/index.ts init",
