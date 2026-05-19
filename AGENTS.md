@@ -63,6 +63,14 @@ curious/
 - **Naming:** `describe` / `it` blocks; file name `<module>.test.ts`.
 - **Imports:** Test files import the module under test with `.js` extensions like production code.
 
+### Running tests
+
+```bash
+npm test
+```
+
+Runs `npm run build`, then executes all `dist/**/*.test.js` files with Node's built-in test runner (`node --test`). Source tests live in `src/<module>.test.ts`; `tsc` emits them to `dist/` beside the compiled module.
+
 Example:
 
 ```typescript

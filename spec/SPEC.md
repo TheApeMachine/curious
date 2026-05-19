@@ -40,11 +40,12 @@ The core CLI and orchestrator are implemented in TypeScript (`src/`, compiled to
 | Resilience   | Transient error detection, connection guard, retry backoff, `force` send for stuck runs (`src/transient-errors.ts`, `src/connection-guard.ts`)                   |
 | State        | `.curious/state.json` persistence (`src/state.ts`)                                                                                                               |
 | Config       | `curious.config.json` + env overrides, parent-directory discovery (`src/config.ts`, `src/project.ts`)                                                            |
+| Agent guidelines | `AGENTS.md` at project root — TypeScript/ESM conventions, verification commands, review rubric (inlined in develop/review/overseer prompts)                |
+| Unit tests       | `npm test` — `node:test` + `node:assert/strict`; `npm run build` then `node --test dist/**/*.test.js` (`package.json`, `src/smoke.test.ts`)                  |
 
 ### Gaps (what dogfooding should close)
 
-- No `AGENTS.md` yet — **T1.1**; develop/review lack binding style rules until then.
-- No automated unit tests — **T1.2**–**T1.9**, **T2.1**–**T2.2**.
+- No module unit tests yet — **T1.3**–**T1.9**, **T2.1**–**T2.2** (harness wired in **T1.2**).
 - Orchestrator edge cases and `inspect` diagnostics lack regression coverage — **T2.3**–**T2.5**.
 - README typo (“caramba’s”) and config example gaps — **T3.1**–**T3.2**.
 - Cloud runtime configured in types but not validated here — **T3.4**.
@@ -65,7 +66,7 @@ The core CLI and orchestrator are implemented in TypeScript (`src/`, compiled to
 - [x] R11: Configuration merges defaults, `curious.config.json`, and environment variables (`CURSOR_API_KEY` required).
 - [ ] R12: README documents install (`npm link` / global), env vars, troubleshooting, and spec shape accurately.
 - [ ] R13: Automated unit tests cover pure-logic modules (spec parsing, review feedback, overseer triggers, workflow/git policy helpers).
-- [ ] R14: `AGENTS.md` at project root defines TypeScript/CLI conventions for develop and review agents working on this repo.
+- [x] R14: `AGENTS.md` at project root defines TypeScript/CLI conventions for develop and review agents working on this repo.
 - [ ] R15: When a develop cycle changes user-facing behavior, prompts, or policies, the same cycle or sync updates **Vision (What exists)**, **Requirements**, and **README** so this spec stays accurate for the next dogfood run.
 - [ ] R16: **Continuous improvement** — when the roadmap is fully checked off, the overseer (or a dedicated roadmap task) promotes prioritized items from **## Next features** into **## Roadmap** + **## Progress** so `curious run --continuous` never stalls for lack of work.
 
@@ -98,8 +99,8 @@ Tasks use stable IDs. The sync phase checks these off when review passes. **All 
 
 ### Phase 1: Agent guidelines & test foundation
 
-- [ ] T1.1 — Add `AGENTS.md` with TypeScript, Node ESM, CLI layout, verification commands (`build`, `typecheck`, `test`), and Curious review expectations (requirement: R14)
-- [ ] T1.2 — Add `npm test` using `node:test` + `node:assert`; wire `package.json` script and document in `AGENTS.md` (requirement: R13)
+- [x] T1.1 — Add `AGENTS.md` with TypeScript, Node ESM, CLI layout, verification commands (`build`, `typecheck`, `test`), and Curious review expectations (requirement: R14)
+- [x] T1.2 — Add `npm test` using `node:test` + `node:assert`; wire `package.json` script and document in `AGENTS.md` (requirement: R13)
 - [ ] T1.3 — Unit tests for `spec-roadmap` (`analyzeRoadmap`, task ID parsing, completion detection) (requirement: R13)
 - [ ] T1.4 — Unit tests for `spec-sections` (`extractSpecSection`, `stripSpecSection`) (requirement: R13)
 - [ ] T1.5 — Unit tests for `review-feedback` (FAIL detection, latest failed review formatting) (requirement: R13)
@@ -147,8 +148,8 @@ _Phase 6 tasks are added by overseer or human when Phases 1–5 are complete. Se
 
 ## Progress
 
-- [ ] T1.1 — Add `AGENTS.md` with TypeScript, Node ESM, CLI layout, verification commands (`build`, `typecheck`, `test`), and Curious review expectations (requirement: R14)
-- [ ] T1.2 — Add `npm test` using `node:test` + `node:assert`; wire `package.json` script and document in `AGENTS.md` (requirement: R13)
+- [x] T1.1 — Add `AGENTS.md` with TypeScript, Node ESM, CLI layout, verification commands (`build`, `typecheck`, `test`), and Curious review expectations (requirement: R14)
+- [x] T1.2 — Add `npm test` using `node:test` + `node:assert`; wire `package.json` script and document in `AGENTS.md` (requirement: R13)
 - [ ] T1.3 — Unit tests for `spec-roadmap` (`analyzeRoadmap`, task ID parsing, completion detection) (requirement: R13)
 - [ ] T1.4 — Unit tests for `spec-sections` (`extractSpecSection`, `stripSpecSection`) (requirement: R13)
 - [ ] T1.5 — Unit tests for `review-feedback` (FAIL detection, latest failed review formatting) (requirement: R13)
@@ -178,7 +179,7 @@ A requirement or roadmap task is **done** when:
 |------------------------|-----------------------------------------------------------------------------------------------------------------|
 | Compile                | `npm run build`                                                                                                 |
 | Types                  | `npm run typecheck`                                                                                             |
-| Unit tests             | `npm test` (after **T1.2**) — must pass on this host                                                            |
+| Unit tests             | `npm test` — must pass on this host                                                            |
 | CLI still runs         | `node dist/index.js --help`                                                                                     |
 | Dogfood smoke          | `curious run --cycle` from repo root with `CURSOR_API_KEY` set                                                  |
 | Continuous improvement | `curious run --continuous` — use after smoke passes; replenishes from **## Next features** when roadmap is done |
@@ -193,6 +194,9 @@ On **arm64**, do not require amd64-only or CI output for PASS. Cross-arch code: 
 | 0     | spec-prime | —      | Primed for dogfooding: Vision, Requirements, Roadmap, Progress, acceptance, R15               |
 | 0     | roadmap    | —      | Expanded Roadmap into single-cycle tasks T1.1–T5.2; Progress = Phase 1 only                   |
 | 0     | spec       | —      | Added **## Next features**, Phase 6 seed, R16 continuous improvement, `--continuous` guidance |
+| 3     | T1.1       | PASS   | Added `AGENTS.md` (137 lines); build/typecheck pass on arm64; R14 checked; next **T1.2** |
+| 4     | T1.2       | PASS   | Wired `npm test` (node:test); smoke test; AGENTS.md Running tests; next **T1.3** |
+| 5     | overseer   | ALIGNED | Checkbox audit: T1.1–T1.2 deliverables in tree; npm test pass; Progress → **T1.3**; no backtrack |
 
 ## Constraints
 
@@ -207,8 +211,8 @@ On **arm64**, do not require amd64-only or CI output for PASS. Cross-arch code: 
 ### Style & process
 
 - Match existing module boundaries: pure helpers in dedicated files, prompts separated from orchestration.
-- Prefer Node built-ins (`node:test` + `node:assert`) before adding heavy test dependencies unless **AGENTS.md** (after T1.1) specifies otherwise.
-- Place tests beside modules as `*.test.ts` under `src/` or in `test/` — follow **AGENTS.md** once T1.1 lands.
+- Prefer Node built-ins (`node:test` + `node:assert`) before adding heavy test dependencies unless **AGENTS.md** specifies otherwise.
+- Place tests beside modules as `src/**/*.test.ts` — per **AGENTS.md** (co-located, not top-level `test/`).
 - Do not edit `dist/` by hand — run `npm run build`.
 - Comments only for non-obvious behavior; keep functions focused.
 - **Self-improvement edits** stay in scope of the active Progress task; avoid drive-by refactors across unrelated modules.
@@ -233,7 +237,7 @@ On **arm64**, do not require amd64-only or CI output for PASS. Cross-arch code: 
 
 ## Open questions
 
-1. **Test layout:** Co-locate `src/**/*.test.ts` vs top-level `test/` — **T1.1** (`AGENTS.md`) decides; default `node:test` per Constraints.
+1. **Test layout:** **Resolved** — co-locate `src/**/*.test.ts` per **AGENTS.md** (T1.1); `node:test` + `node:assert/strict`.
 2. **Cloud runtime:** Defer validation to **T3.4**; treat as experimental until documented.
 3. **Dogfooding:** **Resolved** — this repo runs `curious run` on its own roadmap; human commits and `npm link` after CLI changes.
 4. **npm publish:** Defer to Phase 4 (**T4.1**–**T4.2**) after test coverage from Phase 1–2.

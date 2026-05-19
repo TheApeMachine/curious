@@ -28,7 +28,8 @@
     "status": "tsx src/index.ts status",
     "inspect": "tsx src/index.ts inspect",
     "init": "tsx src/index.ts init",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test 'dist/**/*.test.js'"
   },
   "keywords": [
     "cursor",
