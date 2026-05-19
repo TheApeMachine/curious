@@ -22,7 +22,7 @@ You refine the spec after bootstrap. The loop reads **Progress** for the next ta
 | Phase       | Agent     | Responsibility                                                                                                             |
 |-------------|-----------|----------------------------------------------------------------------------------------------------------------------------|
 | **develop** | Developer | One **Progress** task; after review **FAIL**, gets the **full review** in-prompt and re-works the same task until it passes |
-| **review**  | Reviewer  | Audits the diff; outputs a `review-verdict` block (five criteria + **OVERALL: PASS/FAIL**)                                 |
+| **review**  | Reviewer  | Audits the diff; outputs a `review-verdict` block (six criteria incl. git safety + **OVERALL: PASS/FAIL**)                 |
 | **sync**    | Sync      | On PASS: checks off **Roadmap** / **Progress**, updates **Orchestrator log**; on FAIL: records blockers, leaves tasks open |
 | **overseer** | Overseer | Meta-review: failure patterns, spec alignment; may edit Roadmap/Progress; **optionally** adds **Agent steering** when something needs correction; no code |
 
@@ -150,6 +150,14 @@ After bootstrap and roadmap, `spec/SPEC.md` typically includes:
 
 Task IDs in the roadmap use `T1.1` or `M0` style. The orchestrator only treats **## Roadmap** checkboxes with those IDs as completion criteria (not **Requirements**).
 
+### Git policy (all agents)
+
+Every phase prompt includes a **binding** read-only git rule: agents may use `git status`, `git diff`, `git log`, `git show`, and similar read commands only. They must **not** run mutating git (`reset`, `restore`, `checkout`/`switch` to discard work, `clean`, `stash`, `commit`, `rebase`, etc.). The reviewer scores **6_git_safety** and fails the run if develop used mutating git.
+
+This is enforced in prompts (the Cursor SDK does not offer a shell denylist). For stronger protection in a target repo, add the same rule to **AGENTS.md** or a Cursor rule, and use [hooks](https://cursor.com/docs/agent/hooks) to block mutating `git` in the shell if needed.
+
+Bootstrap seeds the constraint into **## Constraints** in new specs.
+
 ## Commands
 
 | Command                         | Description                                  |
@@ -218,6 +226,7 @@ All agent runs use **Composer 2.5** (`composer-2.5`). The model is fixed and can
 - **`ECONNRESET` / connection dropped** — curious retries the same phase after 10s instead of exiting.
 - **`already has active run`** — a prior run was left wedged (often after a crash). Curious retries with `force` to expire it; rebuild curious if you still see `retryable=false` and the process exits.
 - **`ECONNRESET` loop on review** — curious retries with backoff (15s → 30s → …), reconnects the agent after 3 drops, and stops after 12 failures per phase so you can re-run `curious run` instead of crashing.
+- **Agent discarded uncommitted work via git** — review should FAIL **6_git_safety**. Re-run develop; do not use `git reset`/`restore` yourself unless you intend to. Consider a shell hook in the project to hard-block mutating git for agents.
 
 ## License
 

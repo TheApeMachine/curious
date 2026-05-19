@@ -9,6 +9,7 @@ import {
   formatSteeringPromptBlock,
   stripAgentSteering,
 } from "./spec-steering.js";
+import { GIT_POLICY_SECTION } from "./git-policy.js";
 import type { CycleRecord, Phase } from "./types.js";
 
 const REVIEW_RUBRIC = `
@@ -26,6 +27,7 @@ OVERALL: PASS | FAIL
 3_spec_compliance: PASS | FAIL
 4_homogeneity: PASS | FAIL
 5_verification: PASS | FAIL
+6_git_safety: PASS | FAIL
 blocking_issues:
 - (concrete file:line or symbol; empty only if OVERALL: PASS)
 evidence:
@@ -34,7 +36,8 @@ next_develop:
 - (single roadmap task ID to implement next if FAIL, e.g. T1.2)
 \`\`\`
 
-**OVERALL: PASS** only when all five criteria are PASS.
+**OVERALL: PASS** only when all six criteria are PASS.
+**6_git_safety: FAIL** if develop (or any agent this cycle) ran a mutating git command (see Git policy) or discarded uncommitted work via git.
 Do not implement fixes — only analyze.
 `;
 
@@ -116,7 +119,6 @@ Rules:
 - All code and tests must satisfy AGENTS.md and the spec.
 - **Paste test/benchmark command output** in your final summary.
 - Do not edit **## Roadmap**, **## Progress**, **## Agent steering**, or **## Orchestrator log** (sync/overseer own those).
-- Do not run destructive git commands.
 - If blocked, stop and state the blocker — no placeholders.`;
 
     case "review":
@@ -203,6 +205,8 @@ export function buildPrompt(args: {
     `# Curious — cycle ${cycle}, phase: ${phase.toUpperCase()}`,
     "",
     phaseGoals(phase, hasAgents),
+    "",
+    GIT_POLICY_SECTION,
   ];
 
   if (steering) {

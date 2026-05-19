@@ -5,6 +5,7 @@ import {
   type AgentOptions,
   type SDKAgent,
 } from "@cursor/sdk";
+import { GIT_POLICY_SUBAGENT } from "./git-policy.js";
 import { CURIOUS_MODEL } from "./model.js";
 import type { CuriousConfig } from "./types.js";
 
@@ -43,15 +44,16 @@ export function buildAgentOptions(config: CuriousConfig, agentId?: string): Agen
           "Implements one roadmap task: code, tests, benchmarks. Use during develop phase.",
         prompt: `You are the developer. Implement one spec roadmap task with tests.
 AGENTS.md is inlined in the parent prompt — follow it exactly. Paste verification output.
-Do not edit Roadmap/Progress sections.`,
+Do not edit Roadmap/Progress sections.
+${GIT_POLICY_SUBAGENT}`,
         model: "inherit",
       },
       reviewer: {
         description:
           "Reviews the developer's work against spec and roadmap. Use during review phase.",
         prompt: `You are the reviewer. Audit the diff against spec/SPEC.md and AGENTS.md.
-Output the review-verdict block. OVERALL: PASS only if all five criteria pass.
-Do not edit code or spec.`,
+Output the review-verdict block. OVERALL: PASS only if all six criteria pass (including 6_git_safety).
+Do not edit code or spec. ${GIT_POLICY_SUBAGENT}`,
         model: "inherit",
       },
       overseer: {
@@ -59,7 +61,7 @@ Do not edit code or spec.`,
           "Meta alignment: failure patterns, spec drift, roadmap/Progress fixes. Use during overseer phase.",
         prompt: `You are the overseer. Analyze orchestrator history for repeated failures and spec drift.
 Edit spec/SPEC.md when needed. ## Agent steering is optional — add only for concrete corrective guidance; clear it when the team is aligned.
-Emit the overseer-verdict block. Do not edit source code.`,
+Emit the overseer-verdict block. Do not edit source code. ${GIT_POLICY_SUBAGENT}`,
         model: "inherit",
       },
     },
