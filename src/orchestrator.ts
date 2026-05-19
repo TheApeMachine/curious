@@ -3,7 +3,12 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { CursorAgentError, type SDKAgent } from "@cursor/sdk";
 import type { Run, SendOptions } from "@cursor/sdk";
 import { connectAgent } from "./agent.js";
-import { installConnectionGuard } from "./connection-guard.js";
+import {
+  installConnectionGuard,
+  installOrchestratorNetworkGuard,
+  maxTransientRetriesPerPhase,
+  transientRetryDelayMs,
+} from "./connection-guard.js";
 import type { ResolvedConfig } from "./config.js";
 import { printConfigSummary } from "./config.js";
 import { loadAgentsDocument, relativeToRoot } from "./project.js";
@@ -58,6 +63,9 @@ export class Orchestrator {
   private lastSummary?: string;
   /** True when we cancelled a run to recover from a dropped connection. */
   private recoveryCancel = false;
+  private networkActive = false;
+  private transientRetriesThisPhase = 0;
+  private currentPhase: Phase | null = null;
 
   constructor(
     private readonly config: ResolvedConfig,
@@ -85,6 +93,10 @@ export class Orchestrator {
 
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
+
+    const disposeNetworkGuard = installOrchestratorNetworkGuard(
+      () => this.networkActive,
+    );
 
     try {
       this.agent = await connectAgent(this.config, state.agentId);
@@ -169,6 +181,8 @@ export class Orchestrator {
         }
       } while (!this.stopping);
     } finally {
+      this.networkActive = false;
+      disposeNetworkGuard();
       process.removeListener("SIGINT", shutdown);
       process.removeListener("SIGTERM", shutdown);
       state = await loadState(this.config.projectRoot);
@@ -182,6 +196,11 @@ export class Orchestrator {
 
   private async runPhase(state: CuriousState): Promise<CuriousState> {
     const phase = state.phase;
+    if (this.currentPhase !== phase) {
+      this.transientRetriesThisPhase = 0;
+      this.currentPhase = phase;
+    }
+    this.networkActive = true;
     const specBody = await readFile(this.config.specPath, "utf8");
     const agents = await loadAgentsDocument(
       this.config.projectRoot,
@@ -258,7 +277,11 @@ export class Orchestrator {
       );
 
       const statusStop = run.onDidChangeStatus((status) => {
-        console.log(`[curious] run status → ${status}`);
+        try {
+          console.log(`[curious] run status → ${status}`);
+        } catch {
+          /* listener must not throw */
+        }
       });
 
       this.recoveryCancel = false;
@@ -273,7 +296,17 @@ export class Orchestrator {
           signal: guard.abort.signal,
         });
 
-        const result = await run.wait();
+        let result;
+        try {
+          result = await run.wait();
+        } catch (waitErr) {
+          if (isTransientError(waitErr) || guard.abort.signal.aborted) {
+            throw waitErr instanceof Error
+              ? waitErr
+              : new Error(errorMessage(waitErr));
+          }
+          throw waitErr;
+        }
 
         status = result.status;
         summary = result.result;
@@ -312,12 +345,35 @@ export class Orchestrator {
       const message = errorMessage(err);
 
       if (isTransientError(err)) {
+        this.transientRetriesThisPhase += 1;
         state.lastError = message;
         state.needsForceNextSend = true;
-        console.error(
-          `[curious] transient error during ${phase} (will retry same phase in 10s): ${message}`,
-        );
-        await sleep(10_000);
+
+        if (this.transientRetriesThisPhase >= maxTransientRetriesPerPhase()) {
+          console.error(
+            `[curious] too many connection errors during ${phase} (${this.transientRetriesThisPhase}) — stopping. Re-run \`curious run\` to resume.`,
+          );
+          this.stopping = true;
+        } else {
+          const delayMs = transientRetryDelayMs(
+            this.transientRetriesThisPhase - 1,
+          );
+          if (
+            this.transientRetriesThisPhase === 3 &&
+            this.agent &&
+            state.agentId
+          ) {
+            console.log("[curious] reconnecting agent after repeated drops");
+            await this.agent[Symbol.asyncDispose]();
+            this.agent = await connectAgent(this.config, state.agentId);
+            state.agentId = this.agent.agentId;
+            await saveState(this.config.projectRoot, state);
+          }
+          console.error(
+            `[curious] transient error during ${phase} (retry ${this.transientRetriesThisPhase}/${maxTransientRetriesPerPhase()} in ${Math.round(delayMs / 1000)}s): ${message}`,
+          );
+          await sleep(delayMs);
+        }
       } else if (isAgentBusyError(err)) {
         state.lastError = message;
         state.needsForceNextSend = true;
@@ -358,6 +414,7 @@ export class Orchestrator {
     state.lastRunId = runId || state.lastRunId;
 
     if (status === "finished") {
+      this.transientRetriesThisPhase = 0;
       if (phase === "sync") {
         state.cycle += 1;
         state.phase = shouldRunOverseer(state, this.config)
@@ -370,6 +427,7 @@ export class Orchestrator {
       console.log(`[curious] staying on phase "${phase}" until a run finishes successfully`);
     }
 
+    this.networkActive = false;
     await saveState(this.config.projectRoot, state);
     return state;
   }

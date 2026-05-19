@@ -217,6 +217,7 @@ All agent runs use **Composer 2.5** (`composer-2.5`). The model is fixed and can
 - **Failed run details** — on ERROR, curious prints `[curious] error reason: …` (first line of `run.result`), then a conversation tail with real tool names. Use `curious inspect` or `curious run --verbose`.
 - **`ECONNRESET` / connection dropped** — curious retries the same phase after 10s instead of exiting.
 - **`already has active run`** — a prior run was left wedged (often after a crash). Curious retries with `force` to expire it; rebuild curious if you still see `retryable=false` and the process exits.
+- **`ECONNRESET` loop on review** — curious retries with backoff (15s → 30s → …), reconnects the agent after 3 drops, and stops after 12 failures per phase so you can re-run `curious run` instead of crashing.
 
 ## License
 
