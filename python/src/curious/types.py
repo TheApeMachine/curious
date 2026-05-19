@@ -3,24 +3,33 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from curious.trajectory import ToolCallTrace
+
 Phase = Literal["develop", "review", "sync", "overseer"]
 RunStatus = Literal["finished", "error", "cancelled"]
 
-# How the agent loop talks to a model
 LlmProvider = Literal[
-    "openai_compat",  # Ollama, vLLM, any /v1/chat/completions (stdlib HTTP)
-    "litellm",  # optional: pip install curious-py[litellm]
-    "transformers",  # optional: pip install curious-py[transformers] — native loop + HF weights
-    "smolagents",  # optional: pip install curious-py[smolagents] — HF smolagents agent
+    "openai_compat",
+    "litellm",
+    "transformers",
+    "smolagents",
 ]
 
 SmolagentsAgentType = Literal["tool-calling", "code"]
+STATE_VERSION = 2
+
+CRITERION_KEYS = (
+    "1_maintainability",
+    "2_correctness_performance",
+    "3_spec_compliance",
+    "4_homogeneity",
+    "5_verification",
+    "6_git_safety",
+)
 
 
 @dataclass
 class LlmConfig:
-    """Model routing. See python/README.md for provider matrix."""
-
     provider: LlmProvider = "openai_compat"
     model: str = "qwen3-coder:30b"
     api_key: str | None = None
@@ -28,20 +37,36 @@ class LlmConfig:
     max_tokens: int = 16384
     temperature: float = 0.2
     timeout_sec: int = 600
-    # Hugging Face local (transformers / smolagents)
-    device: str | None = None  # mps, cuda, cpu, auto
+    device: str | None = None
     load_in_4bit: bool = False
     trust_remote_code: bool = True
     smolagents_agent_type: SmolagentsAgentType = "tool-calling"
-    # When openai_compat points at localhost and nothing is listening, use transformers.
     fallback_to_transformers: bool = True
-    fallback_model: str | None = None  # HF repo id; default maps Ollama tags → HF_DEFAULT_MODEL
+    fallback_model: str | None = None
+    adapter_path: str | None = None
+
+
+@dataclass
+class BestOfNConfig:
+    enabled: bool = False
+    n: int = 4
+    temperatures: list[float] = field(default_factory=lambda: [0.2, 0.5, 0.7, 0.9])
 
 
 @dataclass
 class HarnessConfig:
     max_turns: int = 80
     command_timeout_sec: int = 300
+    best_of_n: BestOfNConfig = field(default_factory=BestOfNConfig)
+
+
+@dataclass
+class VerifierConfig:
+    enabled: bool = False
+    model_path: str | None = None
+    base_model: str = "Qwen/Qwen3-1.7B"
+    pass_threshold: float = 0.7
+    disagreement_log: str = ".curious/verifier_disagreement.jsonl"
 
 
 @dataclass
@@ -52,8 +77,6 @@ class HarvestConfig:
 
 @dataclass
 class TrainConfig:
-    """Defaults for `curious-py train dpo` (TRL + PEFT)."""
-
     output_dir: str = ".curious/train/dpo"
     lora_r: int = 16
     lora_alpha: int = 32
@@ -63,6 +86,8 @@ class TrainConfig:
     gradient_accumulation_steps: int = 4
     max_length: int = 4096
     max_prompt_length: int = 2048
+    verifier_output_dir: str = ".curious/train/verifier"
+    grpo_output_dir: str = ".curious/train/grpo"
 
 
 @dataclass
@@ -70,8 +95,10 @@ class CuriousConfig:
     spec_path: str
     cwd: str
     llm: LlmConfig
+    review_llm: LlmConfig | None = None
+    overseer_llm: LlmConfig | None = None
     harness: HarnessConfig = field(default_factory=HarnessConfig)
-    """Git branch Curious checks out before agent work (default: curious)."""
+    verifier: VerifierConfig = field(default_factory=VerifierConfig)
     agent_branch: str = "curious"
     ensure_agent_branch: bool = True
     cycle_delay_ms: int = 0
@@ -80,6 +107,13 @@ class CuriousConfig:
     overseer_on_review_fail_streak: int = 2
     harvest: HarvestConfig | None = None
     train: TrainConfig | None = None
+
+    def llm_for_phase(self, phase: Phase) -> LlmConfig:
+        if phase == "review" and self.review_llm is not None:
+            return self.review_llm
+        if phase == "overseer" and self.overseer_llm is not None:
+            return self.overseer_llm
+        return self.llm
 
 
 @dataclass
@@ -91,11 +125,55 @@ class CycleRecord:
     started_at: str
     finished_at: str
     summary: str | None = None
+    trajectory: list[ToolCallTrace] = field(default_factory=list)
+    spec_snapshot_sha: str | None = None
+    agents_snapshot_sha: str | None = None
+    overseer_intervened: bool = False
+
+    def to_json(self) -> dict:
+        out: dict = {
+            "cycle": self.cycle,
+            "phase": self.phase,
+            "runId": self.run_id,
+            "status": self.status,
+            "startedAt": self.started_at,
+            "finishedAt": self.finished_at,
+        }
+        if self.summary:
+            out["summary"] = self.summary
+        if self.trajectory:
+            out["trajectory"] = [t.to_json() for t in self.trajectory]
+        if self.spec_snapshot_sha:
+            out["specSnapshotSha"] = self.spec_snapshot_sha
+        if self.agents_snapshot_sha:
+            out["agentsSnapshotSha"] = self.agents_snapshot_sha
+        if self.overseer_intervened:
+            out["overseerIntervened"] = True
+        return out
+
+    @classmethod
+    def from_json(cls, data: dict) -> CycleRecord:
+        trajectory = [
+            ToolCallTrace.from_json(t) for t in data.get("trajectory", [])
+        ]
+        return cls(
+            cycle=data["cycle"],
+            phase=data["phase"],
+            run_id=data["runId"],
+            status=data["status"],
+            started_at=data["startedAt"],
+            finished_at=data["finishedAt"],
+            summary=data.get("summary"),
+            trajectory=trajectory,
+            spec_snapshot_sha=data.get("specSnapshotSha"),
+            agents_snapshot_sha=data.get("agentsSnapshotSha"),
+            overseer_intervened=bool(data.get("overseerIntervened")),
+        )
 
 
 @dataclass
 class CuriousState:
-    version: int = 1
+    version: int = STATE_VERSION
     phase: Phase = "develop"
     cycle: int = 0
     running: bool = False
@@ -112,38 +190,16 @@ class CuriousState:
             "running": self.running,
             "lastRunId": self.last_run_id,
             "lastError": self.last_error,
-            "history": [
-                {
-                    "cycle": r.cycle,
-                    "phase": r.phase,
-                    "runId": r.run_id,
-                    "status": r.status,
-                    "startedAt": r.started_at,
-                    "finishedAt": r.finished_at,
-                    **({"summary": r.summary} if r.summary else {}),
-                }
-                for r in self.history
-            ],
+            "history": [r.to_json() for r in self.history],
             "updatedAt": self.updated_at,
         }
 
     @classmethod
     def from_json(cls, data: dict) -> CuriousState:
-        history = []
-        for item in data.get("history", []):
-            history.append(
-                CycleRecord(
-                    cycle=item["cycle"],
-                    phase=item["phase"],
-                    run_id=item["runId"],
-                    status=item["status"],
-                    started_at=item["startedAt"],
-                    finished_at=item["finishedAt"],
-                    summary=item.get("summary"),
-                )
-            )
+        version = data.get("version", 1)
+        history = [CycleRecord.from_json(item) for item in data.get("history", [])]
         return cls(
-            version=data.get("version", 1),
+            version=version if version >= 2 else 1,
             phase=data.get("phase", "develop"),
             cycle=data.get("cycle", 0),
             running=data.get("running", False),

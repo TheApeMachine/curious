@@ -6,7 +6,10 @@ from pathlib import Path
 
 from curious.commands.bootstrap import run_bootstrap
 from curious.commands.roadmap import run_roadmap
+from curious.commands.spec_history import run_spec_history_correlate
 from curious.commands.train import run_train_dpo
+from curious.commands.train_grpo import run_train_grpo
+from curious.commands.train_verifier import run_train_verifier
 from curious.config import resolve_config
 from curious.harvest import run_harvest
 from curious import hf_cli
@@ -26,7 +29,7 @@ Commands:
   curious-py bootstrap [--verbose]
   curious-py roadmap [--verbose]
   curious-py run [options]
-  curious-py status | reset | harvest | train | init | hf
+  curious-py status | reset | harvest | train | spec-history | init | hf
 
 Run modes (curious-py run):
   (default)           Until roadmap complete
@@ -136,6 +139,13 @@ def main(argv: list[str] | None = None) -> None:
             cmd_harvest(args)
         elif args.command == "hf":
             hf_cli.main(rest)
+        elif args.command == "spec-history":
+            sh = argparse.ArgumentParser(prog="curious-py spec-history")
+            sh_sub = sh.add_subparsers(dest="sh_cmd", required=True)
+            sh_sub.add_parser("correlate", help="Correlate overseer edits with review pass rates")
+            sh_args = sh.parse_args(rest)
+            if sh_args.sh_cmd == "correlate":
+                run_spec_history_correlate(args.config)
         elif args.command == "train":
             train_parser = argparse.ArgumentParser(prog="curious-py train")
             train_sub = train_parser.add_subparsers(dest="train_cmd", required=True)
@@ -144,6 +154,15 @@ def main(argv: list[str] | None = None) -> None:
             dpo_p.add_argument("--model", help="HF base model id")
             dpo_p.add_argument("-o", "--output", help="Output directory")
             dpo_p.add_argument("--min-quality", type=float, default=0.5)
+            ver_p = train_sub.add_parser("verifier", help="Train diff classifier verifier")
+            ver_p.add_argument("--dataset")
+            ver_p.add_argument("--model")
+            ver_p.add_argument("-o", "--output")
+            grpo_p = train_sub.add_parser("grpo", help="GRPO repo-specialization (scaffold)")
+            grpo_p.add_argument("--tasks-file")
+            grpo_p.add_argument("--model")
+            grpo_p.add_argument("-o", "--output")
+            grpo_p.add_argument("--rollouts", type=int, default=4)
             train_args = train_parser.parse_args(rest)
             if train_args.train_cmd == "dpo":
                 run_train_dpo(
@@ -152,6 +171,21 @@ def main(argv: list[str] | None = None) -> None:
                     model_id=train_args.model,
                     output_dir=train_args.output,
                     min_quality=train_args.min_quality,
+                )
+            elif train_args.train_cmd == "verifier":
+                run_train_verifier(
+                    args.config,
+                    base_model=train_args.model,
+                    dataset_path=train_args.dataset,
+                    output_dir=train_args.output,
+                )
+            elif train_args.train_cmd == "grpo":
+                run_train_grpo(
+                    args.config,
+                    base_model=train_args.model,
+                    tasks_file=train_args.tasks_file,
+                    output_dir=train_args.output,
+                    n_rollouts_per_task=train_args.rollouts,
                 )
             else:
                 raise ValueError(f"Unknown train command: {train_args.train_cmd}")

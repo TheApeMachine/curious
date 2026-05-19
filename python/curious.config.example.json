@@ -20,9 +20,18 @@
     "trustRemoteCode": true,
     "smolagentsAgentType": "tool-calling",
     "fallbackToTransformers": true,
-    "fallbackModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+    "fallbackModel": "Qwen/Qwen3-Coder-Next",
+    "adapterPath": null
   },
   "_comment_llm_fallback": "When baseUrl (Ollama/vLLM) is unreachable, load fallbackModel via transformers — requires: pip install curious-py[transformers]",
+  "reviewLlm": null,
+  "overseerLlm": null,
+  "verifier": {
+    "enabled": false,
+    "baseModel": "Qwen/Qwen3-1.7B",
+    "modelPath": null,
+    "passThreshold": 0.7
+  },
   "_comment_llm_providers": {
     "openai_compat": "Ollama / vLLM — model is server tag, e.g. qwen3-coder:30b",
     "transformers": "pip install curious-py[transformers] — model is HF repo id",
@@ -31,13 +40,23 @@
   },
   "_comment_llm_smolagents_example": {
     "provider": "smolagents",
-    "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "model": "Qwen/Qwen3-Coder-Next",
     "device": "auto",
     "smolagentsAgentType": "tool-calling"
   },
   "harness": {
     "maxTurns": 80,
-    "commandTimeoutSec": 300
+    "commandTimeoutSec": 300,
+    "bestOfN": {
+      "enabled": false,
+      "n": 4,
+      "temperatures": [
+        0.2,
+        0.5,
+        0.7,
+        0.9
+      ]
+    }
   },
   "harvest": {
     "enabled": false,

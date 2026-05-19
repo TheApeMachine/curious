@@ -4,7 +4,7 @@ import socket
 from dataclasses import replace
 from urllib.parse import urlparse
 
-from curious.config import HF_DEFAULT_MODEL
+from curious.config import HF_DEFAULT_MODEL, VERIFIER_DEFAULT_MODEL
 from curious.harness.providers.openai_compat import DEFAULT_LOCAL_BASE_URL
 from curious.types import LlmConfig
 
@@ -12,6 +12,7 @@ from curious.types import LlmConfig
 _LOCAL_MODEL_TO_HF: dict[str, str] = {
     "qwen3-coder:30b": HF_DEFAULT_MODEL,
     "qwen3-coder": HF_DEFAULT_MODEL,
+    "qwen3-coder-next": HF_DEFAULT_MODEL,
 }
 
 _LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "0.0.0.0"})

@@ -7,6 +7,7 @@ from typing import Any
 from curious.harness.result import HarnessResult, SYSTEM_PROMPT
 from curious.harness.providers import create_chat_provider
 from curious.harness.tools import TOOL_DEFINITIONS, execute_tool
+from curious.trajectory import ToolCallTrace, excerpt_tool_result, trim_trajectory
 from curious.types import HarnessConfig, LlmConfig
 
 
@@ -26,6 +27,7 @@ def run_native_harness(
         {"role": "user", "content": prompt},
     ]
     last_content = ""
+    trajectory: list[ToolCallTrace] = []
 
     for turn in range(1, harness.max_turns + 1):
         try:
@@ -37,6 +39,7 @@ def run_native_harness(
                 summary=None,
                 error=str(exc),
                 turns=turn,
+                trajectory=trim_trajectory(trajectory),
             )
 
         assistant_msg: dict[str, Any] = {
@@ -61,6 +64,7 @@ def run_native_harness(
                 status="finished",
                 summary=(completion.content or "").strip() or last_content,
                 turns=turn,
+                trajectory=trim_trajectory(trajectory),
             )
 
         for tc in completion.tool_calls:
@@ -76,6 +80,13 @@ def run_native_harness(
                 workspace,
                 harness.command_timeout_sec,
             )
+            trajectory.append(
+                ToolCallTrace(
+                    name=tc.name,
+                    arguments=fn_args,
+                    result_excerpt=excerpt_tool_result(result),
+                )
+            )
             messages.append(
                 {"role": "tool", "tool_call_id": tc.id, "content": result}
             )
@@ -86,4 +97,5 @@ def run_native_harness(
         summary=last_content,
         error=f"max turns ({harness.max_turns}) exceeded",
         turns=harness.max_turns,
+        trajectory=trim_trajectory(trajectory),
     )

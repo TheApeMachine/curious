@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from curious.trajectory import ToolCallTrace
 from curious.types import RunStatus
 
 SYSTEM_PROMPT = """You are a software engineering agent working in a local repository.
@@ -22,3 +23,4 @@ class HarnessResult:
     summary: str | None
     error: str | None = None
     turns: int = 0
+    trajectory: list[ToolCallTrace] | None = None

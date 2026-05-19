@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from curious.types import CuriousState, Phase
+from curious.types import STATE_VERSION, CuriousState, Phase
 
 STATE_DIR = ".curious"
 STATE_FILE = "state.json"
@@ -16,6 +16,7 @@ def state_path(project_root: str | Path) -> Path:
 
 def initial_state(phase: Phase = "develop") -> CuriousState:
     return CuriousState(
+        version=STATE_VERSION,
         phase=phase,
         cycle=0,
         running=False,
@@ -28,7 +29,10 @@ def load_state(project_root: str | Path) -> CuriousState:
     if not path.is_file():
         return initial_state()
     data = json.loads(path.read_text(encoding="utf-8"))
-    return CuriousState.from_json(data)
+    state = CuriousState.from_json(data)
+    if state.version < STATE_VERSION:
+        state.version = STATE_VERSION
+    return state
 
 
 def save_state(project_root: str | Path, state: CuriousState) -> None:
