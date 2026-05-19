@@ -1,12 +1,49 @@
 import type { ConversationTurn, Run } from "@cursor/sdk";
+import {
+  formatConversationToolCall,
+  type ConversationToolCall,
+} from "./tool-call-format.js";
 
 const TAIL_TURNS = 8;
+const ERROR_SUMMARY_MAX = 320;
+
+/** One-line excerpt from `run.result` for failed runs. */
+export function formatRunErrorSummary(result?: string): string | undefined {
+  if (!result?.trim()) {
+    return undefined;
+  }
+
+  const text = result.trim();
+  const firstLine = text.split("\n").find((line) => line.trim())?.trim();
+  if (!firstLine) {
+    return undefined;
+  }
+
+  return truncate(firstLine, ERROR_SUMMARY_MAX);
+}
+
+function printRunErrorSummary(run: Run): void {
+  const summary = formatRunErrorSummary(run.result);
+  if (summary) {
+    console.error(`[curious] error reason: ${summary}`);
+    return;
+  }
+  console.error(
+    "[curious] run ended with error (no result message — see transcript below)",
+  );
+}
+
+/** One-line reason plus full transcript (conversation tail, run.result). */
+export async function logRunErrorDetails(run: Run): Promise<void> {
+  printRunErrorSummary(run);
+  await logRunFailure(run);
+}
 
 export async function logRunFailure(run: Run): Promise<void> {
   const lines: string[] = [];
 
   if (run.result) {
-    lines.push("--- run.result ---", run.result);
+    lines.push("--- run.result (full) ---", run.result);
   }
 
   if (run.supports("conversation")) {
@@ -62,9 +99,8 @@ function formatConversationTail(turns: ConversationTurn[]): string {
       } else if (step.type === "thinkingMessage") {
         parts.push(`[thinking] ${truncate(step.message.text, 800)}`);
       } else if (step.type === "toolCall") {
-        const toolCall = step.message as { name?: string; status?: string };
         parts.push(
-          `[tool] ${toolCall.name ?? "unknown"} (${toolCall.status ?? "?"})`,
+          `[tool] ${formatConversationToolCall(step.message as ConversationToolCall)}`,
         );
       }
     }

@@ -8,7 +8,10 @@ import type { ResolvedConfig } from "./config.js";
 import { printConfigSummary } from "./config.js";
 import { loadAgentsDocument, relativeToRoot } from "./project.js";
 import { buildPrompt } from "./prompts.js";
-import { logRunFailure } from "./run-diagnostics.js";
+import {
+  formatRunErrorSummary,
+  logRunErrorDetails,
+} from "./run-diagnostics.js";
 import { consumeRunStream } from "./stream.js";
 import {
   errorMessage,
@@ -272,9 +275,11 @@ export class Orchestrator {
         this.lastSummary = summary;
 
         if (result.status === "error") {
-          state.lastError = `Run ${runId} ended with error`;
+          const errorReason = formatRunErrorSummary(result.result);
+          state.lastError =
+            errorReason ?? `Run ${runId} ended with error`;
           console.error(`[curious] run error: ${runId}`);
-          await logRunFailure(run);
+          await logRunErrorDetails(run);
         } else if (result.status === "cancelled") {
           if (this.recoveryCancel || guard.abort.signal.aborted) {
             throw guard.abort.signal.reason ?? new Error("connection lost");

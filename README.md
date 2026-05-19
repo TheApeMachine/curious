@@ -214,7 +214,7 @@ All agent runs use **Composer 2.5** (`composer-2.5`). The model is fixed and can
 - **Stopped after one task** — You likely used `--cycle`. Use `curious run` (no flags) for the full roadmap.
 - **Phase stuck after error** — Fix the issue, then re-run; the orchestrator stays on the failed phase until a run finishes successfully.
 - **No AGENTS.md** — Develop/review still run; a warning is printed. Add `AGENTS.md` at the project root or agent `cwd` for style rules.
-- **Failed run details** — `curious inspect` or `curious run --verbose`.
+- **Failed run details** — on ERROR, curious prints `[curious] error reason: …` (first line of `run.result`), then a conversation tail with real tool names. Use `curious inspect` or `curious run --verbose`.
 - **`ECONNRESET` / connection dropped** — curious retries the same phase after 10s instead of exiting.
 - **`already has active run`** — a prior run was left wedged (often after a crash). Curious retries with `force` to expire it; rebuild curious if you still see `retryable=false` and the process exits.
 

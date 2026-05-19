@@ -1,6 +1,6 @@
 import { Agent } from "@cursor/sdk";
 import { resolveConfig } from "./config.js";
-import { logRunFailure } from "./run-diagnostics.js";
+import { logRunErrorDetails } from "./run-diagnostics.js";
 import { loadState } from "./state.js";
 
 export async function inspectLastRun(
@@ -35,5 +35,5 @@ export async function inspectLastRun(
   });
 
   console.log(`[curious] inspect ${runId} status=${run.status}`);
-  await logRunFailure(run);
+  await logRunErrorDetails(run);
 }
