@@ -43,7 +43,8 @@ def build_search_query(profile: VastGpuProfile, *, interruptible: bool) -> str:
     if interruptible:
         parts.append("inet_down>50")
     if profile.preferred_gpus:
-        names = " ".join(profile.preferred_gpus)
+        # Vast query DSL: comma-separated inside brackets (not space-separated).
+        names = ",".join(profile.preferred_gpus)
         parts.append(f"gpu_name in [{names}]")
     return " ".join(parts)
 

@@ -25,7 +25,7 @@ from curious.types import (
     VastGpuProfile,
 )
 
-HF_DEFAULT_MODEL = "Qwen/Qwen3-Coder-Next"
+HF_DEFAULT_MODEL = "Qwen/Qwen3-Coder-30B-A3B-Instruct"
 VERIFIER_DEFAULT_MODEL = "Qwen/Qwen3-1.7B"
 from curious.harness.providers.openai_compat import (
     DEFAULT_LOCAL_API_KEY,

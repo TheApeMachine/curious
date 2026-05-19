@@ -11,6 +11,34 @@ from curious.trajectory import ToolCallTrace, excerpt_tool_result, trim_trajecto
 from curious.types import HarnessConfig, LlmConfig
 
 
+def _missing_required_paths(required: list[Path] | None) -> list[Path]:
+    if not required:
+        return []
+    missing: list[Path] = []
+    for path in required:
+        if not path.is_file():
+            missing.append(path)
+            continue
+        if path.stat().st_size < 80:
+            missing.append(path)
+    return missing
+
+
+def _nudge_missing_files_message(missing: list[Path], workspace: Path) -> str:
+    rels = []
+    for path in missing:
+        try:
+            rels.append(str(path.relative_to(workspace)))
+        except ValueError:
+            rels.append(str(path))
+    joined = ", ".join(rels)
+    return (
+        f"Required file(s) not written yet: {joined}. "
+        "Use the write_file tool to create them on disk before finishing. "
+        "Do not reply with only a summary or paste the spec in chat."
+    )
+
+
 def run_native_harness(
     run_id: str,
     prompt: str,
@@ -19,6 +47,7 @@ def run_native_harness(
     harness: HarnessConfig,
     *,
     verbose: bool = False,
+    required_paths: list[Path] | None = None,
 ) -> HarnessResult:
     """Tool-calling loop using a ChatProvider (openai_compat, litellm, transformers)."""
     provider = create_chat_provider(llm)
@@ -59,6 +88,29 @@ def run_native_harness(
         last_content = completion.content or last_content
 
         if not completion.tool_calls:
+            missing = _missing_required_paths(required_paths)
+            if missing and turn < harness.max_turns:
+                if verbose:
+                    print(f"[curious] harness: waiting for required file(s): {missing}")
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": _nudge_missing_files_message(missing, workspace),
+                    }
+                )
+                continue
+            if missing:
+                return HarnessResult(
+                    run_id=run_id,
+                    status="error",
+                    summary=(completion.content or "").strip() or last_content,
+                    error=(
+                        "Agent finished without writing required file(s): "
+                        + ", ".join(str(p) for p in missing)
+                    ),
+                    turns=turn,
+                    trajectory=trim_trajectory(trajectory),
+                )
             return HarnessResult(
                 run_id=run_id,
                 status="finished",

@@ -57,3 +57,18 @@ def test_state_v2_trajectory_persist() -> None:
         assert loaded.version == STATE_VERSION
         assert len(loaded.history[0].trajectory) == 1
         assert loaded.history[0].spec_snapshot_sha == "abc"
+
+
+def test_diff_at_review_round_trip() -> None:
+    record = CycleRecord(
+        cycle=1,
+        phase="review",
+        run_id="r1",
+        status="finished",
+        started_at="t0",
+        finished_at="t1",
+        diff_at_review="+line from review time",
+    )
+    data = record.to_json()
+    restored = CycleRecord.from_json(data)
+    assert restored.diff_at_review == "+line from review time"

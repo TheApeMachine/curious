@@ -29,11 +29,9 @@ def completion_to_text(completion: str | list[dict[str, Any]]) -> str:
     return str(completion)
 
 
-def extract_diff_proxy(text: str) -> str:
-    """Use unified-diff hunks if present; otherwise treat full completion as context."""
-    if _DIFF_HUNK.search(text):
-        return text
-    return text
+def looks_like_unified_diff(text: str) -> bool:
+    """True when completion contains unified-diff hunks (verifier training distribution)."""
+    return bool(_DIFF_HUNK.search(text))
 
 
 def heuristic_develop_reward(text: str) -> float:
@@ -119,11 +117,12 @@ class CuriousGRPReward:
 
             score = self.heuristic_weight * heuristic_develop_reward(text)
 
-            if verifier is not None:
-                diff = extract_diff_proxy(text)
+            # Verifier was trained on git diffs (<|diff|>); skip verifier signal for
+            # prose/tool-call rollouts until GRPO runs in a worktree with real diffs.
+            if verifier is not None and looks_like_unified_diff(text):
                 try:
                     v = verifier.score(
-                        diff=diff,
+                        diff=text,
                         spec_section=spec,
                         agents_section=agents,
                     )

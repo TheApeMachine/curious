@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
@@ -22,20 +21,6 @@ class VerifierExample:
     labels: dict[str, bool]
     overall: bool
     metadata: dict[str, Any]
-
-
-def _git_diff(project_root: Path, cwd: str) -> str:
-    try:
-        result = subprocess.run(
-            ["git", "diff", "HEAD"],
-            cwd=cwd or project_root,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        return result.stdout or ""
-    except (subprocess.TimeoutExpired, OSError):
-        return ""
 
 
 def _workflow_only_blockers(verdict) -> bool:
@@ -82,8 +67,8 @@ def extract_verifier_examples(
             continue
         _, develop = develop_pair
 
-        diff = _git_diff(Path(project_root), cwd)
-        if not diff.strip():
+        diff = (record.diff_at_review or "").strip()
+        if not diff:
             continue
 
         labels = {

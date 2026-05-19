@@ -20,7 +20,7 @@
     "trustRemoteCode": true,
     "smolagentsAgentType": "tool-calling",
     "fallbackToTransformers": true,
-    "fallbackModel": "Qwen/Qwen3-Coder-Next",
+    "fallbackModel": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
     "adapterPath": null
   },
   "_comment_llm_fallback": "When baseUrl (Ollama/vLLM) is unreachable, load fallbackModel via transformers — requires: pip install curious-py[transformers]",
@@ -40,7 +40,7 @@
   },
   "_comment_llm_smolagents_example": {
     "provider": "smolagents",
-    "model": "Qwen/Qwen3-Coder-Next",
+    "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
     "device": "auto",
     "smolagentsAgentType": "tool-calling"
   },

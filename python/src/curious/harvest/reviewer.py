@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -20,20 +19,6 @@ class ReviewerExample:
     downstream_outcome: DownstreamOutcome
     cycles_until_outcome: int
     metadata: dict[str, Any]
-
-
-def _git_diff(project_root: str) -> str:
-    try:
-        result = subprocess.run(
-            ["git", "diff", "HEAD"],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        return result.stdout or ""
-    except (subprocess.TimeoutExpired, OSError):
-        return ""
 
 
 def _files_in_diff(diff: str) -> set[str]:
@@ -60,7 +45,9 @@ def harvest_reviewer_examples(
         if not verdict:
             continue
 
-        diff = _git_diff(project_root)
+        diff = (record.diff_at_review or "").strip()
+        if not diff:
+            continue
         touched = _files_in_diff(diff)
         outcome: DownstreamOutcome = "clean"
         cycles_until = 0

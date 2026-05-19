@@ -6,7 +6,13 @@ from curious.train.grpo_reward import (
     CuriousGRPReward,
     completion_to_text,
     heuristic_develop_reward,
+    looks_like_unified_diff,
 )
+
+
+def test_looks_like_unified_diff() -> None:
+    assert looks_like_unified_diff("@@ -1,3 +1,4 @@\n-old\n+new")
+    assert not looks_like_unified_diff("I edited foo.py and ran tests.")
 
 
 def test_heuristic_develop_reward() -> None:

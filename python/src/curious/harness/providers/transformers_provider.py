@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from curious.harness.providers.device_load import resolve_device_map
+from curious.harness.tool_prompt import format_tools_for_text_prompt
 from curious.harness.providers.tool_call_parsers import (
     parse_tool_calls_from_text,
     strip_tool_call_markup,
@@ -71,6 +72,44 @@ class TransformersProvider:
         self.llm = llm
         self.tokenizer, self.model = _load_model(llm)
 
+    def _prepare_messages(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Ensure tool schemas reach the model (chat template or system fallback)."""
+        if not tools:
+            return messages
+
+        template_kwargs: dict[str, Any] = {
+            "tokenize": False,
+            "add_generation_prompt": True,
+        }
+        if "qwen3" in self.llm.model.lower():
+            template_kwargs["enable_thinking"] = False
+
+        try:
+            self.tokenizer.apply_chat_template(
+                messages,
+                tools=tools,
+                **template_kwargs,
+            )
+            return messages
+        except TypeError:
+            pass
+
+        out = [dict(m) for m in messages]
+        suffix = format_tools_for_text_prompt(tools)
+        for i, msg in enumerate(out):
+            if msg.get("role") == "system":
+                out[i] = {
+                    **msg,
+                    "content": (msg.get("content") or "") + suffix,
+                }
+                return out
+        out.insert(0, {"role": "system", "content": suffix.strip()})
+        return out
+
     def complete(
         self,
         messages: list[dict[str, Any]],
@@ -78,18 +117,22 @@ class TransformersProvider:
     ) -> ChatCompletion:
         import torch
 
+        prepared = self._prepare_messages(messages, tools)
         template_kwargs: dict[str, Any] = {
             "tokenize": False,
             "add_generation_prompt": True,
         }
+        if "qwen3" in self.llm.model.lower():
+            template_kwargs["enable_thinking"] = False
+
         try:
             text = self.tokenizer.apply_chat_template(
-                messages,
+                prepared,
                 tools=tools,
                 **template_kwargs,
             )
         except TypeError:
-            text = self.tokenizer.apply_chat_template(messages, **template_kwargs)
+            text = self.tokenizer.apply_chat_template(prepared, **template_kwargs)
 
         inputs = self.tokenizer(text, return_tensors="pt")
         device = _model_device(self.model)
