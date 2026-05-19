@@ -9,6 +9,25 @@ from pathlib import Path
 from curious.config import ResolvedConfig, print_config_summary
 from curious.workspace import prepare_agent_workspace
 from curious.harness import run_harness
+from curious.harness.best_of_n import develop_best_of_n
+from curious.scanner_rules import (
+    check_rules,
+    format_violations_for_prompt,
+    load_rules,
+    save_rules,
+    synthesize_rules,
+)
+from curious.spec_history import (
+    OverseerLabel,
+    append_overseer_label,
+    count_diff_lines,
+    overseer_diff_for_cycle,
+    snapshot_agents,
+    snapshot_spec,
+)
+from curious.spec_sections import extract_spec_section
+from curious.review_verdict import parse_review_verdict
+from curious.verifier.model import load_verifier, log_disagreement
 from curious.orchestrator_cycles import (
     should_abort_cycles_mode_on_phase_error,
     should_stop_after_requested_cycles,
@@ -152,6 +171,12 @@ class Orchestrator:
                 f"[curious] overseer triggered: {overseer_trigger_reason(state, self.config)}"
             )
 
+        root = Path(self.config.project_root)
+        spec_sha = snapshot_spec(root, state.cycle, spec_body, phase)
+        agents_sha = None
+        if agents and agents.content:
+            agents_sha = snapshot_agents(root, state.cycle, phase, agents.content)
+
         prompt = build_prompt(
             phase=phase,
             spec_path=self.config.spec_path,
@@ -168,21 +193,54 @@ class Orchestrator:
             history=state.history,
         )
 
+        if phase == "review":
+            violations = check_rules(Path(self.config.cwd), load_rules(root))
+            block = format_violations_for_prompt(violations)
+            if block:
+                prompt = prompt + "\n\n" + block
+
+        llm = self.config.llm_for_phase(phase)
+        spec_section = extract_spec_section(spec_body, "## Roadmap") or spec_body[:4000]
+        agents_section = (agents.content[:4000] if agents else "")
+
         print(f"\n[curious] ── cycle {state.cycle} · {phase} ──")
 
         started_at = _now()
         run_id = ""
         status: str = "error"
         summary: str | None = None
+        result = None
 
         try:
-            result = run_harness(
-                prompt,
-                Path(self.config.cwd),
-                self.config.llm,
-                self.config.harness,
-                verbose=self.opts.verbose,
-            )
+            if (
+                phase == "develop"
+                and self.config.harness.best_of_n.enabled
+                and self.config.verifier.enabled
+            ):
+                verifier = load_verifier(
+                    self.config.verifier.model_path,
+                    self.config.verifier.base_model,
+                )
+                result = develop_best_of_n(
+                    prompt,
+                    Path(self.config.cwd),
+                    llm,
+                    self.config.harness,
+                    verifier,
+                    cycle=state.cycle,
+                    spec_section=spec_section,
+                    agents_section=agents_section,
+                    verbose=self.opts.verbose,
+                    bon=self.config.harness.best_of_n,
+                )
+            else:
+                result = run_harness(
+                    prompt,
+                    Path(self.config.cwd),
+                    llm,
+                    self.config.harness,
+                    verbose=self.opts.verbose,
+                )
             run_id = result.run_id
             print(f"[curious] run {run_id}")
             status = result.status
@@ -202,6 +260,64 @@ class Orchestrator:
             state.last_error = str(exc)
             print(f"[curious] phase error: {exc}")
 
+        overseer_intervened = False
+        if phase == "overseer" and status == "finished":
+            after_spec = Path(self.config.spec_path).read_text(encoding="utf-8")
+            diff = overseer_diff_for_cycle(root, state.cycle)
+            if diff:
+                added, removed = count_diff_lines(diff)
+                sha_after = snapshot_spec(root, state.cycle, after_spec, phase)
+                append_overseer_label(
+                    root,
+                    OverseerLabel(
+                        cycle=state.cycle,
+                        sha_before=spec_sha,
+                        sha_after=sha_after,
+                        lines_added=added,
+                        lines_removed=removed,
+                        summary=(summary or "")[:500],
+                    ),
+                )
+                new_rules = synthesize_rules(
+                    diff, spec_sha, state.cycle, self.config.llm
+                )
+                if new_rules:
+                    existing = load_rules(root)
+                    save_rules(root, existing + new_rules)
+                overseer_intervened = True
+
+        if (
+            phase == "review"
+            and status == "finished"
+            and self.config.verifier.enabled
+            and summary
+        ):
+            try:
+                from curious.harvest.verifier import _git_diff
+
+                verifier = load_verifier(
+                    self.config.verifier.model_path,
+                    self.config.verifier.base_model,
+                )
+                diff = _git_diff(self.config.project_root, self.config.cwd)
+                scores = verifier.score(
+                    diff=diff,
+                    spec_section=spec_section,
+                    agents_section=agents_section,
+                )
+                verdict = parse_review_verdict(summary)
+                reviewer_pass = bool(verdict and verdict.overall == "PASS")
+                log_disagreement(
+                    root,
+                    self.config.verifier.disagreement_log,
+                    cycle=state.cycle,
+                    verifier_scores=scores,
+                    reviewer_pass=reviewer_pass,
+                    diff_excerpt=diff,
+                )
+            except Exception as exc:
+                print(f"[curious] verifier check skipped: {exc}")
+
         record = CycleRecord(
             cycle=state.cycle,
             phase=phase,
@@ -210,6 +326,10 @@ class Orchestrator:
             started_at=started_at,
             finished_at=_now(),
             summary=summary,
+            trajectory=result.trajectory or [] if result else [],
+            spec_snapshot_sha=spec_sha,
+            agents_snapshot_sha=agents_sha,
+            overseer_intervened=overseer_intervened,
         )
         state.history.append(record)
         if len(state.history) > 100:

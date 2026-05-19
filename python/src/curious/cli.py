@@ -6,7 +6,12 @@ from pathlib import Path
 
 from curious.commands.bootstrap import run_bootstrap
 from curious.commands.roadmap import run_roadmap
+from curious.commands.spec_history import run_spec_history_correlate
 from curious.commands.train import run_train_dpo
+from curious.commands.train_grpo import run_train_grpo
+from curious.commands.train_reviewer import run_train_reviewer
+from curious.commands.train_verifier import run_train_verifier
+from curious.commands.vast_manage import run_vast_instances, run_vast_offers, run_vast_stop
 from curious.config import resolve_config
 from curious.harvest import run_harvest
 from curious import hf_cli
@@ -26,7 +31,7 @@ Commands:
   curious-py bootstrap [--verbose]
   curious-py roadmap [--verbose]
   curious-py run [options]
-  curious-py status | reset | harvest | train | init | hf
+  curious-py status | reset | harvest | train | vast | spec-history | init | hf
 
 Run modes (curious-py run):
   (default)           Until roadmap complete
@@ -136,6 +141,28 @@ def main(argv: list[str] | None = None) -> None:
             cmd_harvest(args)
         elif args.command == "hf":
             hf_cli.main(rest)
+        elif args.command == "vast":
+            vast_parser = argparse.ArgumentParser(prog="curious-py vast")
+            vast_sub = vast_parser.add_subparsers(dest="vast_cmd", required=True)
+            offers_p = vast_sub.add_parser("offers", help="List cheapest GPU offers")
+            offers_p.add_argument("--kind", default="dpo", choices=["dpo", "grpo", "verifier", "reviewer"])
+            vast_sub.add_parser("instances", help="Show running instances")
+            stop_p = vast_sub.add_parser("stop", help="Destroy curious-train instances")
+            stop_p.add_argument("--id", type=int, dest="instance_id")
+            vast_args = vast_parser.parse_args(rest)
+            if vast_args.vast_cmd == "offers":
+                run_vast_offers(args.config, kind=vast_args.kind)
+            elif vast_args.vast_cmd == "instances":
+                run_vast_instances(args.config)
+            elif vast_args.vast_cmd == "stop":
+                run_vast_stop(args.config, instance_id=vast_args.instance_id)
+        elif args.command == "spec-history":
+            sh = argparse.ArgumentParser(prog="curious-py spec-history")
+            sh_sub = sh.add_subparsers(dest="sh_cmd", required=True)
+            sh_sub.add_parser("correlate", help="Correlate overseer edits with review pass rates")
+            sh_args = sh.parse_args(rest)
+            if sh_args.sh_cmd == "correlate":
+                run_spec_history_correlate(args.config)
         elif args.command == "train":
             train_parser = argparse.ArgumentParser(prog="curious-py train")
             train_sub = train_parser.add_subparsers(dest="train_cmd", required=True)
@@ -144,7 +171,32 @@ def main(argv: list[str] | None = None) -> None:
             dpo_p.add_argument("--model", help="HF base model id")
             dpo_p.add_argument("-o", "--output", help="Output directory")
             dpo_p.add_argument("--min-quality", type=float, default=0.5)
+            dpo_p.add_argument("--local", action="store_true", help="Force local GPU")
+            dpo_p.add_argument("--vast", action="store_true", help="Force Vast.ai")
+            ver_p = train_sub.add_parser("verifier", help="Train diff classifier verifier")
+            ver_p.add_argument("--dataset")
+            ver_p.add_argument("--model")
+            ver_p.add_argument("-o", "--output")
+            ver_p.add_argument("--local", action="store_true")
+            ver_p.add_argument("--vast", action="store_true")
+            grpo_p = train_sub.add_parser("grpo", help="GRPO fine-tune with verifier reward")
+            grpo_p.add_argument("--tasks-file", help="grpo.jsonl prompts (or harvest --format grpo)")
+            grpo_p.add_argument("--model")
+            grpo_p.add_argument("-o", "--output")
+            grpo_p.add_argument("--rollouts", type=int, default=4)
+            grpo_p.add_argument("--max-completion-length", type=int, default=2048)
+            grpo_p.add_argument("--epochs", type=int, default=1)
+            grpo_p.add_argument("--local", action="store_true")
+            grpo_p.add_argument("--vast", action="store_true")
+            rev_p = train_sub.add_parser("reviewer", help="Train reviewer on downstream outcomes")
+            rev_p.add_argument("--dataset")
+            rev_p.add_argument("--model")
+            rev_p.add_argument("-o", "--output")
+            rev_p.add_argument("--local", action="store_true")
+            rev_p.add_argument("--vast", action="store_true")
             train_args = train_parser.parse_args(rest)
+            force_local = getattr(train_args, "local", False)
+            force_vast = True if getattr(train_args, "vast", False) else None
             if train_args.train_cmd == "dpo":
                 run_train_dpo(
                     args.config,
@@ -152,6 +204,38 @@ def main(argv: list[str] | None = None) -> None:
                     model_id=train_args.model,
                     output_dir=train_args.output,
                     min_quality=train_args.min_quality,
+                    force_local=force_local,
+                    force_vast=force_vast,
+                )
+            elif train_args.train_cmd == "verifier":
+                run_train_verifier(
+                    args.config,
+                    base_model=train_args.model,
+                    dataset_path=train_args.dataset,
+                    output_dir=train_args.output,
+                    force_local=force_local,
+                    force_vast=force_vast,
+                )
+            elif train_args.train_cmd == "grpo":
+                run_train_grpo(
+                    args.config,
+                    base_model=train_args.model,
+                    tasks_file=train_args.tasks_file,
+                    output_dir=train_args.output,
+                    n_rollouts_per_task=train_args.rollouts,
+                    max_completion_length=train_args.max_completion_length,
+                    num_epochs=train_args.epochs,
+                    force_local=force_local,
+                    force_vast=force_vast,
+                )
+            elif train_args.train_cmd == "reviewer":
+                run_train_reviewer(
+                    args.config,
+                    base_model=train_args.model,
+                    dataset_path=train_args.dataset,
+                    output_dir=train_args.output,
+                    force_local=force_local,
+                    force_vast=force_vast,
                 )
             else:
                 raise ValueError(f"Unknown train command: {train_args.train_cmd}")

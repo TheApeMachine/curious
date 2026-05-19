@@ -5,7 +5,9 @@ import sys
 from pathlib import Path
 
 from curious.config import HF_DEFAULT_MODEL, resolve_config
-from curious.types import TrainConfig
+from curious.train.dpo_format import completion_from_row, rejection_from_row
+from curious.types import ResolvedConfig, TrainConfig
+from curious.vast.dispatch import dispatch_training
 
 
 def _require_train() -> None:
@@ -40,8 +42,50 @@ def run_train_dpo(
     model_id: str | None = None,
     output_dir: str | None = None,
     min_quality: float = 0.5,
+    force_local: bool = False,
+    force_vast: bool | None = None,
 ) -> None:
-    """DPO fine-tune with [TRL](https://huggingface.co/docs/trl/index) + [PEFT](https://huggingface.co/docs/peft/index)."""
+    """DPO fine-tune with TRL + PEFT (local or Vast.ai)."""
+    config = resolve_config(config_path=config_path, require_spec=False)
+
+    def local() -> None:
+        _run_train_dpo_local(
+            config,
+            dataset_path=dataset_path,
+            model_id=model_id,
+            output_dir=output_dir,
+            min_quality=min_quality,
+        )
+
+    flags: dict = {}
+    if dataset_path:
+        flags["dataset"] = dataset_path
+    if model_id:
+        flags["model"] = model_id
+    if output_dir:
+        flags["output"] = output_dir
+    flags["min_quality"] = min_quality
+
+    dispatch_training(
+        config,
+        kind="dpo",
+        label="dpo",
+        local_runner=local,
+        config_path=config_path,
+        force_local=force_local,
+        force_vast=force_vast,
+        train_flags=flags,
+    )
+
+
+def _run_train_dpo_local(
+    config: ResolvedConfig,
+    *,
+    dataset_path: str | None,
+    model_id: str | None,
+    output_dir: str | None,
+    min_quality: float,
+) -> None:
     _require_train()
 
     from datasets import Dataset
@@ -49,7 +93,6 @@ def run_train_dpo(
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import DPOConfig, DPOTrainer
 
-    config = resolve_config(config_path=config_path, require_spec=False)
     train_cfg = config.train or TrainConfig()
     project_root = Path(config.project_root)
 
@@ -67,26 +110,28 @@ def run_train_dpo(
         base_model = HF_DEFAULT_MODEL
 
     raw = _load_dpo_jsonl(data_file)
-    records = [
-        {
-            "prompt": row["prompt"],
-            "chosen": row["chosen"],
-            "rejected": row["rejected"],
-        }
-        for row in raw
-        if float(row.get("quality_score", 0)) >= min_quality
-    ]
-    if not records:
+    filtered = [row for row in raw if float(row.get("quality_score", 0)) >= min_quality]
+    if not filtered:
         raise ValueError(f"No examples >= min_quality={min_quality} in {data_file}")
 
-    print(f"[curious] train dpo: {len(records)} examples from {data_file}")
+    print(f"[curious] train dpo: {len(filtered)} examples from {data_file}")
     print(f"[curious] train dpo: base model {base_model}")
     print(f"[curious] train dpo: output → {out_dir}")
 
-    dataset = Dataset.from_list(records)
     tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+
+    records = [
+        {
+            "prompt": row["prompt"],
+            "chosen": completion_from_row(row, tokenizer),
+            "rejected": rejection_from_row(row, tokenizer),
+        }
+        for row in filtered
+    ]
+
+    dataset = Dataset.from_list(records)
 
     model = AutoModelForCausalLM.from_pretrained(
         base_model,

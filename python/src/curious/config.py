@@ -12,6 +12,7 @@ from curious.project import (
     should_discover_parents,
 )
 from curious.types import (
+    BestOfNConfig,
     CuriousConfig,
     HarnessConfig,
     HarvestConfig,
@@ -19,9 +20,13 @@ from curious.types import (
     LlmProvider,
     ResolvedConfig,
     TrainConfig,
+    VerifierConfig,
+    VastConfig,
+    VastGpuProfile,
 )
 
-HF_DEFAULT_MODEL = "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+HF_DEFAULT_MODEL = "Qwen/Qwen3-Coder-Next"
+VERIFIER_DEFAULT_MODEL = "Qwen/Qwen3-1.7B"
 from curious.harness.providers.openai_compat import (
     DEFAULT_LOCAL_API_KEY,
     DEFAULT_LOCAL_BASE_URL,
@@ -78,6 +83,77 @@ def _merge_dict(base: dict, override: dict) -> dict:
     return out
 
 
+def _parse_vast_dict(vast_raw: dict) -> dict:
+    profiles: dict[str, VastGpuProfile] = {}
+    for name, prof in (vast_raw.get("profiles") or {}).items():
+        if not isinstance(prof, dict):
+            continue
+        profiles[name] = VastGpuProfile(
+            min_gpu_ram_gb=float(
+                prof.get("minGpuRamGb", prof.get("min_gpu_ram_gb", 24))
+            ),
+            min_cuda_major=int(
+                prof.get("minCudaMajor", prof.get("min_cuda_major", 12))
+            ),
+            max_dph=float(prof.get("maxDph", prof.get("max_dph", 1.5))),
+            disk_gb=int(prof.get("diskGb", prof.get("disk_gb", 80))),
+            preferred_gpus=list(
+                prof.get("preferredGpus", prof.get("preferred_gpus", []))
+            )
+            or ["RTX_4090", "RTX_3090"],
+        )
+    default_enabled = bool(os.environ.get("VAST_API_KEY") or os.environ.get("VASTAI_API_KEY"))
+    return {
+        "enabled": vast_raw.get("enabled", default_enabled),
+        "api_key": vast_raw.get("apiKey", vast_raw.get("api_key")),
+        "interruptible": vast_raw.get("interruptible", True),
+        "max_dph": float(vast_raw.get("maxDph", vast_raw.get("max_dph", 1.5))),
+        "disk_gb": vast_raw.get("diskGb", vast_raw.get("disk_gb")),
+        "image": vast_raw.get(
+            "image", "pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime"
+        ),
+        "label_prefix": vast_raw.get(
+            "labelPrefix", vast_raw.get("label_prefix", "curious-train")
+        ),
+        "auto_destroy": vast_raw.get("autoDestroy", vast_raw.get("auto_destroy", True)),
+        "ssh_timeout_sec": int(
+            vast_raw.get("sshTimeoutSec", vast_raw.get("ssh_timeout_sec", 600))
+        ),
+        "train_timeout_sec": int(
+            vast_raw.get("trainTimeoutSec", vast_raw.get("train_timeout_sec", 86_400))
+        ),
+        "profiles": profiles,
+    }
+
+
+def _parse_llm_dict(llm_raw: dict) -> dict:
+    return {
+        "provider": llm_raw.get("provider")
+        or os.environ.get("CURIOUS_LLM_PROVIDER", "openai_compat"),
+        "model": llm_raw.get("model", os.environ.get("LLM_MODEL", "")),
+        "api_key": llm_raw.get("apiKey") or llm_raw.get("api_key"),
+        "base_url": llm_raw.get("baseUrl") or llm_raw.get("base_url"),
+        "max_tokens": llm_raw.get("maxTokens", llm_raw.get("max_tokens", 16384)),
+        "temperature": llm_raw.get("temperature", 0.2),
+        "timeout_sec": llm_raw.get("timeoutSec", llm_raw.get("timeout_sec", 600)),
+        "device": llm_raw.get("device"),
+        "load_in_4bit": llm_raw.get("loadIn4bit", llm_raw.get("load_in_4bit", False)),
+        "trust_remote_code": llm_raw.get(
+            "trustRemoteCode", llm_raw.get("trust_remote_code", True)
+        ),
+        "smolagents_agent_type": llm_raw.get(
+            "smolagentsAgentType",
+            llm_raw.get("smolagents_agent_type", "tool-calling"),
+        ),
+        "fallback_to_transformers": llm_raw.get(
+            "fallbackToTransformers",
+            llm_raw.get("fallback_to_transformers", True),
+        ),
+        "fallback_model": llm_raw.get("fallbackModel", llm_raw.get("fallback_model")),
+        "adapter_path": llm_raw.get("adapterPath", llm_raw.get("adapter_path")),
+    }
+
+
 def _config_from_file_data(data: dict, resolve_relative_to: Path) -> dict:
     """Normalize JSON keys to snake_case-ish internal dict."""
     cwd = data.get("cwd", ".")
@@ -89,27 +165,34 @@ def _config_from_file_data(data: dict, resolve_relative_to: Path) -> dict:
     llm_raw = data.get("llm", {})
     harness_raw = data.get("harness", {})
     harvest_raw = data.get("harvest")
+    verifier_raw = data.get("verifier", {})
+    bon_raw = harness_raw.get("bestOfN", harness_raw.get("best_of_n", {}))
+    vast_raw = data.get("vast", {})
 
     return {
         "spec_path": str(spec_path.resolve()),
         "cwd": str(cwd_path.resolve()),
-        "llm": {
-            "provider": llm_raw.get("provider")
-            or os.environ.get("CURIOUS_LLM_PROVIDER", "openai_compat"),
-            "model": llm_raw.get("model", os.environ.get("LLM_MODEL", "")),
-            "api_key": llm_raw.get("apiKey") or llm_raw.get("api_key"),
-            "base_url": llm_raw.get("baseUrl") or llm_raw.get("base_url"),
-            "max_tokens": llm_raw.get("maxTokens", llm_raw.get("max_tokens", 16384)),
-            "temperature": llm_raw.get("temperature", 0.2),
-            "timeout_sec": llm_raw.get("timeoutSec", llm_raw.get("timeout_sec", 600)),
-            "device": llm_raw.get("device"),
-            "load_in_4bit": llm_raw.get("loadIn4bit", llm_raw.get("load_in_4bit", False)),
-            "trust_remote_code": llm_raw.get(
-                "trustRemoteCode", llm_raw.get("trust_remote_code", True)
+        "llm": _parse_llm_dict(llm_raw),
+        "review_llm": _parse_llm_dict(data["reviewLlm"])
+        if data.get("reviewLlm")
+        else (_parse_llm_dict(data["review_llm"]) if data.get("review_llm") else None),
+        "overseer_llm": _parse_llm_dict(data["overseerLlm"])
+        if data.get("overseerLlm")
+        else (
+            _parse_llm_dict(data["overseer_llm"]) if data.get("overseer_llm") else None
+        ),
+        "verifier": {
+            "enabled": verifier_raw.get("enabled", False),
+            "model_path": verifier_raw.get("modelPath", verifier_raw.get("model_path")),
+            "base_model": verifier_raw.get(
+                "baseModel", verifier_raw.get("base_model", VERIFIER_DEFAULT_MODEL)
             ),
-            "smolagents_agent_type": llm_raw.get(
-                "smolagentsAgentType",
-                llm_raw.get("smolagents_agent_type", "tool-calling"),
+            "pass_threshold": float(
+                verifier_raw.get("passThreshold", verifier_raw.get("pass_threshold", 0.7))
+            ),
+            "disagreement_log": verifier_raw.get(
+                "disagreementLog",
+                verifier_raw.get("disagreement_log", ".curious/verifier_disagreement.jsonl"),
             ),
         },
         "harness": {
@@ -118,6 +201,13 @@ def _config_from_file_data(data: dict, resolve_relative_to: Path) -> dict:
                 "commandTimeoutSec",
                 harness_raw.get("command_timeout_sec", 300),
             ),
+            "best_of_n": {
+                "enabled": bon_raw.get("enabled", False),
+                "n": bon_raw.get("n", 4),
+                "temperatures": bon_raw.get(
+                    "temperatures", [0.2, 0.5, 0.7, 0.9]
+                ),
+            },
         },
         "agent_branch": data.get("agentBranch", data.get("agent_branch", "curious")),
         "ensure_agent_branch": data.get(
@@ -134,14 +224,38 @@ def _config_from_file_data(data: dict, resolve_relative_to: Path) -> dict:
         ),
         "harvest": harvest_raw,
         "train": data.get("train"),
+        "vast": _parse_vast_dict(vast_raw) if vast_raw else _parse_vast_dict({}),
     }
+
+
+def _llm_from_dict(llm_d: dict) -> LlmConfig:
+    provider = _normalize_provider(llm_d.get("provider"))
+    return LlmConfig(
+        provider=provider,
+        model=llm_d.get("model") or _default_model_for_provider(provider),
+        api_key=llm_d.get("api_key") or os.environ.get("LLM_API_KEY"),
+        base_url=llm_d.get("base_url") or os.environ.get("LLM_BASE_URL"),
+        max_tokens=int(llm_d.get("max_tokens", 16384)),
+        temperature=float(llm_d.get("temperature", 0.2)),
+        timeout_sec=int(llm_d.get("timeout_sec", 600)),
+        device=llm_d.get("device"),
+        load_in_4bit=bool(llm_d.get("load_in_4bit", False)),
+        trust_remote_code=bool(llm_d.get("trust_remote_code", True)),
+        smolagents_agent_type=llm_d.get("smolagents_agent_type", "tool-calling"),  # type: ignore[arg-type]
+        fallback_to_transformers=bool(llm_d.get("fallback_to_transformers", True)),
+        fallback_model=llm_d.get("fallback_model"),
+        adapter_path=llm_d.get("adapter_path"),
+    )
 
 
 def _dict_to_config(d: dict) -> CuriousConfig:
     llm_d = d["llm"]
     harness_d = d.get("harness", {})
+    verifier_d = d.get("verifier", {})
+    bon_d = harness_d.get("best_of_n", {})
     harvest_d = d.get("harvest")
     train_d = d.get("train")
+    vast_d = d.get("vast", {})
     harvest = None
     if harvest_d:
         harvest = HarvestConfig(
@@ -176,27 +290,52 @@ def _dict_to_config(d: dict) -> CuriousConfig:
             max_prompt_length=int(
                 train_d.get("maxPromptLength", train_d.get("max_prompt_length", 2048))
             ),
+            verifier_output_dir=train_d.get(
+                "verifierOutputDir",
+                train_d.get("verifier_output_dir", ".curious/train/verifier"),
+            ),
+            grpo_output_dir=train_d.get(
+                "grpoOutputDir", train_d.get("grpo_output_dir", ".curious/train/grpo")
+            ),
         )
-    provider = _normalize_provider(llm_d.get("provider"))
+    review_llm = _llm_from_dict(d["review_llm"]) if d.get("review_llm") else None
+    overseer_llm = _llm_from_dict(d["overseer_llm"]) if d.get("overseer_llm") else None
+    vast = VastConfig(
+        enabled=bool(vast_d.get("enabled", False)),
+        api_key=vast_d.get("api_key") or os.environ.get("VAST_API_KEY"),
+        interruptible=bool(vast_d.get("interruptible", True)),
+        max_dph=float(vast_d.get("max_dph", 1.5)),
+        disk_gb=vast_d.get("disk_gb"),
+        image=str(vast_d.get("image", "pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime")),
+        label_prefix=str(vast_d.get("label_prefix", "curious-train")),
+        auto_destroy=bool(vast_d.get("auto_destroy", True)),
+        ssh_timeout_sec=int(vast_d.get("ssh_timeout_sec", 600)),
+        train_timeout_sec=int(vast_d.get("train_timeout_sec", 86_400)),
+        profiles=vast_d.get("profiles") or {},
+    )
     return CuriousConfig(
         spec_path=d["spec_path"],
         cwd=d["cwd"],
-        llm=LlmConfig(
-            provider=provider,
-            model=llm_d.get("model") or _default_model_for_provider(provider),
-            api_key=llm_d.get("api_key") or os.environ.get("LLM_API_KEY"),
-            base_url=llm_d.get("base_url") or os.environ.get("LLM_BASE_URL"),
-            max_tokens=int(llm_d.get("max_tokens", 16384)),
-            temperature=float(llm_d.get("temperature", 0.2)),
-            timeout_sec=int(llm_d.get("timeout_sec", 600)),
-            device=llm_d.get("device"),
-            load_in_4bit=bool(llm_d.get("load_in_4bit", False)),
-            trust_remote_code=bool(llm_d.get("trust_remote_code", True)),
-            smolagents_agent_type=llm_d.get("smolagents_agent_type", "tool-calling"),  # type: ignore[arg-type]
+        llm=_llm_from_dict(llm_d),
+        review_llm=review_llm,
+        overseer_llm=overseer_llm,
+        verifier=VerifierConfig(
+            enabled=bool(verifier_d.get("enabled", False)),
+            model_path=verifier_d.get("model_path"),
+            base_model=str(verifier_d.get("base_model", VERIFIER_DEFAULT_MODEL)),
+            pass_threshold=float(verifier_d.get("pass_threshold", 0.7)),
+            disagreement_log=str(
+                verifier_d.get("disagreement_log", ".curious/verifier_disagreement.jsonl")
+            ),
         ),
         harness=HarnessConfig(
             max_turns=int(harness_d.get("max_turns", 80)),
             command_timeout_sec=int(harness_d.get("command_timeout_sec", 300)),
+            best_of_n=BestOfNConfig(
+                enabled=bool(bon_d.get("enabled", False)),
+                n=int(bon_d.get("n", 4)),
+                temperatures=list(bon_d.get("temperatures", [0.2, 0.5, 0.7, 0.9])),
+            ),
         ),
         agent_branch=str(d.get("agent_branch", "curious")),
         ensure_agent_branch=bool(d.get("ensure_agent_branch", True)),
@@ -206,6 +345,7 @@ def _dict_to_config(d: dict) -> CuriousConfig:
         overseer_on_review_fail_streak=int(d.get("overseer_on_review_fail_streak", 2)),
         harvest=harvest,
         train=train,
+        vast=vast,
     )
 
 
@@ -250,6 +390,12 @@ def config_from_env() -> dict:
         partial.setdefault("llm", {})["apiKey"] = os.environ["LLM_API_KEY"]
     if os.environ.get("LLM_BASE_URL"):
         partial.setdefault("llm", {})["baseUrl"] = os.environ["LLM_BASE_URL"]
+    if os.environ.get("CURIOUS_FALLBACK_TO_TRANSFORMERS") is not None:
+        partial.setdefault("llm", {})["fallbackToTransformers"] = os.environ[
+            "CURIOUS_FALLBACK_TO_TRANSFORMERS"
+        ].lower() in ("1", "true", "yes")
+    if os.environ.get("CURIOUS_FALLBACK_MODEL"):
+        partial.setdefault("llm", {})["fallbackModel"] = os.environ["CURIOUS_FALLBACK_MODEL"]
     if os.environ.get("CURIOUS_CYCLE_DELAY_MS"):
         partial["cycleDelayMs"] = int(os.environ["CURIOUS_CYCLE_DELAY_MS"])
     if os.environ.get("CURIOUS_MAX_CYCLES"):
@@ -266,6 +412,16 @@ def config_from_env() -> dict:
             "true",
             "yes",
         )
+    if os.environ.get("VAST_API_KEY"):
+        partial.setdefault("vast", {})["apiKey"] = os.environ["VAST_API_KEY"]
+    if os.environ.get("CURIOUS_VAST") is not None:
+        partial.setdefault("vast", {})["enabled"] = os.environ["CURIOUS_VAST"].lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+    if os.environ.get("CURIOUS_VAST_MAX_DPH"):
+        partial.setdefault("vast", {})["maxDph"] = float(os.environ["CURIOUS_VAST_MAX_DPH"])
     return partial
 
 
@@ -338,7 +494,10 @@ def resolve_config(
         spec_path=config.spec_path,
         cwd=config.cwd,
         llm=config.llm,
+        review_llm=config.review_llm,
+        overseer_llm=config.overseer_llm,
         harness=config.harness,
+        verifier=config.verifier,
         agent_branch=config.agent_branch,
         ensure_agent_branch=config.ensure_agent_branch,
         cycle_delay_ms=config.cycle_delay_ms,
@@ -347,6 +506,7 @@ def resolve_config(
         overseer_on_review_fail_streak=config.overseer_on_review_fail_streak,
         harvest=config.harvest,
         train=config.train,
+        vast=config.vast,
         project_root=str(located.project_root),
         has_spec=located.has_spec,
     )
@@ -386,3 +546,10 @@ def print_config_summary(config: ResolvedConfig) -> None:
         print(f"[curious] overseer: {'; '.join(parts)}")
     else:
         print("[curious] overseer: disabled")
+    if config.vast and config.vast.enabled:
+        print(
+            f"[curious] vast: enabled (max ${config.vast.max_dph:.2f}/hr, "
+            f"interruptible={config.vast.interruptible})"
+        )
+    else:
+        print("[curious] vast: disabled (local training only)")

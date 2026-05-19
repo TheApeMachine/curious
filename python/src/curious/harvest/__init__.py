@@ -5,14 +5,15 @@ from dataclasses import asdict
 from pathlib import Path
 
 from curious.harvest.dpo import DpoExample, harvest_dpo_pairs
+from curious.harvest.grpo import harvest_grpo_tasks
+from curious.harvest.reviewer import harvest_reviewer_examples
+from curious.harvest.verifier import (
+    VerifierExample,
+    examples_to_jsonl_rows as verifier_rows,
+    extract_verifier_examples,
+)
 from curious.state import load_state
 from curious.types import ResolvedConfig
-
-HarvestFormat = str
-
-
-def _default_output_path(project_root: Path, fmt: str) -> Path:
-    return project_root / ".curious" / "harvest" / f"{fmt}.jsonl"
 
 
 def resolve_harvest_output(
@@ -27,7 +28,7 @@ def resolve_harvest_output(
         if not resolved.is_absolute():
             resolved = project_root / resolved
     else:
-        return _default_output_path(project_root, fmt)
+        return project_root / ".curious" / "harvest" / f"{fmt}.jsonl"
 
     if str(resolved).endswith(("/", "\\")):
         return resolved / f"{fmt}.jsonl"
@@ -44,9 +45,6 @@ def run_harvest(
     min_quality: float = 0.5,
     include_rejected: bool = False,
 ) -> tuple[Path, int, int]:
-    if fmt != "dpo":
-        raise ValueError(f"Unsupported harvest format: {fmt}")
-
     state = load_state(config.project_root)
     root = Path(config.project_root)
     out = resolve_harvest_output(
@@ -56,18 +54,48 @@ def run_harvest(
         output_path,
     )
 
-    all_examples = harvest_dpo_pairs(
-        state,
-        project_root=config.project_root,
-        cwd=config.cwd,
-        spec_path=config.spec_path,
-        min_quality=min_quality,
-        include_rejected=include_rejected,
-    )
-    accepted = [e for e in all_examples if e.quality_score >= min_quality]
-    skipped = len(all_examples) - len(accepted)
+    skipped = 0
+    if fmt == "dpo":
+        all_examples = harvest_dpo_pairs(
+            state,
+            project_root=config.project_root,
+            cwd=config.cwd,
+            spec_path=config.spec_path,
+            min_quality=min_quality,
+            include_rejected=include_rejected,
+        )
+        accepted = [e for e in all_examples if e.quality_score >= min_quality]
+        skipped = len(all_examples) - len(accepted)
+        rows = [asdict(e) for e in accepted]
+    elif fmt == "verifier":
+        examples = extract_verifier_examples(
+            state,
+            project_root=config.project_root,
+            cwd=config.cwd,
+            spec_path=config.spec_path,
+        )
+        rows = verifier_rows(examples)
+        accepted = examples
+    elif fmt == "reviewer":
+        from curious.harvest.reviewer import examples_to_jsonl_rows
+
+        examples = harvest_reviewer_examples(state, project_root=config.project_root)
+        rows = examples_to_jsonl_rows(examples)
+        accepted = examples
+    elif fmt == "grpo":
+        examples = harvest_grpo_tasks(
+            state,
+            project_root=config.project_root,
+            spec_path=config.spec_path,
+        )
+        rows = [ex.to_json() for ex in examples]
+        accepted = examples
+    else:
+        raise ValueError(
+            f"Unsupported harvest format: {fmt} (use dpo, verifier, reviewer, or grpo)"
+        )
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    lines = [json.dumps(asdict(e), ensure_ascii=False) for e in accepted]
+    lines = [json.dumps(row, ensure_ascii=False) for row in rows]
     out.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
     return out, len(accepted), skipped

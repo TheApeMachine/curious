@@ -12,6 +12,7 @@ from curious.harvest.quality import (
 )
 from curious.review_feedback import is_review_fail
 from curious.review_verdict import extract_task_id, parse_review_verdict
+from curious.trajectory import ToolCallTrace, trajectory_to_messages
 from curious.types import CuriousState, CycleRecord
 
 
@@ -26,6 +27,17 @@ class DpoExample:
     quality_score: float
     metadata: dict[str, Any]
     reject_reason: str | None = None
+    chosen_trajectory: list[ToolCallTrace] | None = None
+    rejected_trajectory: list[ToolCallTrace] | None = None
+
+
+def _trajectory_text(traces: list[ToolCallTrace] | None, summary: str) -> str:
+    if not traces:
+        return summary
+    import json
+
+    msgs = trajectory_to_messages(traces)
+    return json.dumps({"messages": msgs, "summary": summary}, ensure_ascii=False)
 
 
 def _find_develop_before_review(
@@ -213,8 +225,16 @@ def harvest_dpo_pairs(
                 format="dpo",
                 task_id=task_id,
                 prompt=prompt,
-                chosen=pass_dev_record.summary.strip(),
-                rejected=fail_dev_record.summary.strip(),
+                chosen=_trajectory_text(
+                    pass_dev_record.trajectory,
+                    pass_dev_record.summary.strip(),
+                ),
+                rejected=_trajectory_text(
+                    fail_dev_record.trajectory,
+                    fail_dev_record.summary.strip(),
+                ),
+                chosen_trajectory=pass_dev_record.trajectory or None,
+                rejected_trajectory=fail_dev_record.trajectory or None,
                 rationale=fail_verdict.blocking_issues,
                 quality_score=score,
                 reject_reason=reject_reason,

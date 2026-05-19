@@ -24,8 +24,9 @@ def _require_transformers() -> None:
 
 
 def _load_model(llm: LlmConfig) -> tuple[Any, Any]:
-    if llm.model in _MODEL_CACHE:
-        return _MODEL_CACHE[llm.model]
+    cache_key = f"{llm.model}::{llm.adapter_path or ''}"
+    if cache_key in _MODEL_CACHE:
+        return _MODEL_CACHE[cache_key]
 
     _require_transformers()
     import torch
@@ -46,7 +47,14 @@ def _load_model(llm: LlmConfig) -> tuple[Any, Any]:
         load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True)
 
     model = AutoModelForCausalLM.from_pretrained(llm.model, **load_kwargs)
-    _MODEL_CACHE[llm.model] = (tokenizer, model)
+
+    if llm.adapter_path:
+        from peft import PeftModel
+
+        model = PeftModel.from_pretrained(model, llm.adapter_path)
+
+    cache_key = f"{llm.model}::{llm.adapter_path or ''}"
+    _MODEL_CACHE[cache_key] = (tokenizer, model)
     return tokenizer, model
 
 

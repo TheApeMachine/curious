@@ -33,9 +33,12 @@ train = [
   "accelerate>=1.2.0",
   "torch>=2.4.0",
 ]
+vast = [
+  "vastai>=0.3.0",
+]
 dev = ["pytest>=8.0.0"]
 all = [
-  "curious-py[litellm,transformers,smolagents,train,dev]",
+  "curious-py[litellm,transformers,smolagents,train,vast,dev]",
 ]
 
 [project.scripts]
