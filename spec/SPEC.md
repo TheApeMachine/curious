@@ -40,12 +40,13 @@ The core CLI and orchestrator are implemented in TypeScript (`src/`, compiled to
 | Resilience   | Transient error detection, connection guard, retry backoff, `force` send for stuck runs (`src/transient-errors.ts`, `src/connection-guard.ts`)                   |
 | State        | `.curious/state.json` persistence (`src/state.ts`)                                                                                                               |
 | Config       | `curious.config.json` + env overrides, parent-directory discovery (`src/config.ts`, `src/project.ts`)                                                            |
+| Harvest      | `curious harvest --format dpo` — JSONL export from `.curious/state.json` + optional git join (`src/harvest/`, `src/review-verdict.ts`)                         |
 | Agent guidelines | `AGENTS.md` at project root — TypeScript/ESM conventions, verification commands, review rubric (inlined in develop/review/overseer prompts)                |
-| Unit tests       | `npm test` — `node:test` + `node:assert/strict`; `npm run build` then `node --test dist/**/*.test.js` (`package.json`, `src/smoke.test.ts`)                  |
+| Unit tests       | `npm test` — `node:test` + `node:assert/strict`; harness + `src/spec-roadmap.test.ts` (8) + `src/spec-sections.test.ts` (12) + `src/review-feedback.test.ts` (11) + `src/workflow-policy.test.ts` (13) + `src/spec-steering.test.ts` (12) + `src/state.test.ts` (11) + `src/overseer.test.ts` (17) + `src/smoke.test.ts` (7: harness + 6 dogfood smoke) |
 
 ### Gaps (what dogfooding should close)
 
-- No module unit tests yet — **T1.3**–**T1.9**, **T2.1**–**T2.2** (harness wired in **T1.2**).
+- Phase 1 complete (**T1.1**–**T1.10**); **T2.1**–**T2.2** resilience module unit tests remain.
 - Orchestrator edge cases and `inspect` diagnostics lack regression coverage — **T2.3**–**T2.5**.
 - README typo (“caramba’s”) and config example gaps — **T3.1**–**T3.2**.
 - Cloud runtime configured in types but not validated here — **T3.4**.
@@ -69,6 +70,28 @@ The core CLI and orchestrator are implemented in TypeScript (`src/`, compiled to
 - [x] R14: `AGENTS.md` at project root defines TypeScript/CLI conventions for develop and review agents working on this repo.
 - [ ] R15: When a develop cycle changes user-facing behavior, prompts, or policies, the same cycle or sync updates **Vision (What exists)**, **Requirements**, and **README** so this spec stays accurate for the next dogfood run.
 - [ ] R16: **Continuous improvement** — when the roadmap is fully checked off, the overseer (or a dedicated roadmap task) promotes prioritized items from **## Next features** into **## Roadmap** + **## Progress** so `curious run --continuous` never stalls for lack of work.
+- [x] R17: **`curious harvest`** exports fine-tuning examples from orchestrator history without changing the agent loop; opt-in via `harvest` config; default output under `.curious/harvest/`.
+
+## Fine-tuning harvest (byproduct)
+
+Curious cycles are **`(state, action, reward, correction)`** tuples: develop diff + commentary, structured `review-verdict`, next develop fix. **`curious harvest`** reads `.curious/state.json` (and joins git SHAs when available) — **no change to develop/review/sync**.
+
+| Format | Status | Record |
+|--------|--------|--------|
+| **DPO** (`--format dpo`) | **MVP shipped** | `{prompt, chosen, rejected, rationale, quality_score, metadata}` |
+| Process-reward / verifier | Planned | Per-criterion FAIL + `file:line` from `blocking_issues` |
+| Critique SFT | Planned | `{diff, spec, agents_md, verdict_block}` |
+| Spec planning | Planned | Bootstrap/roadmap outputs |
+| Tool-use traces | Planned | Tool sequence before PASS vs FAIL |
+| Overseer meta | Planned | `{history, spec_before, spec_after, overseer_verdict}` |
+
+**Quality filters (DPO):** drop `error`/`cancelled` runs; workflow-only blockers; meta tasks; noisy trajectories (3+ cycles); overseer steering/backtrack between FAIL and PASS. **`quality_score`** 0–1 on each row.
+
+**Privacy:** `harvest.enabled` defaults off in config; all content stays local under `.curious/harvest/`. Not RLHF-in-the-loop — training is external.
+
+```bash
+curious harvest --format dpo --min-quality 0.5 -o .curious/harvest/dpo.jsonl
+```
 
 ## Next features
 
@@ -101,14 +124,14 @@ Tasks use stable IDs. The sync phase checks these off when review passes. **All 
 
 - [x] T1.1 — Add `AGENTS.md` with TypeScript, Node ESM, CLI layout, verification commands (`build`, `typecheck`, `test`), and Curious review expectations (requirement: R14)
 - [x] T1.2 — Add `npm test` using `node:test` + `node:assert`; wire `package.json` script and document in `AGENTS.md` (requirement: R13)
-- [ ] T1.3 — Unit tests for `spec-roadmap` (`analyzeRoadmap`, task ID parsing, completion detection) (requirement: R13)
-- [ ] T1.4 — Unit tests for `spec-sections` (`extractSpecSection`, `stripSpecSection`) (requirement: R13)
-- [ ] T1.5 — Unit tests for `review-feedback` (FAIL detection, latest failed review formatting) (requirement: R13)
-- [ ] T1.6 — Unit tests for `workflow-policy` (`sanitizeSteering`, host arch helpers, policy section builders) (requirement: R9, R13)
-- [ ] T1.7 — Unit tests for `spec-steering` (parse, strip, phase-specific injection) (requirement: R13)
-- [ ] T1.8 — Unit tests for `state` (`nextPhase`, `initialState`, path helpers) (requirement: R2, R13)
-- [ ] T1.9 — Unit tests for `overseer` triggers (`shouldRunOverseer`, streak counting, history formatting) (requirement: R7, R13)
-- [ ] T1.10 — Dogfood smoke: `curious run --cycle` completes develop→review→sync for one Progress task; `npm run build` and `npm test` pass on this host (requirement: R1, R2, R5)
+- [x] T1.3 — Unit tests for `spec-roadmap` (`analyzeRoadmap`, task ID parsing, completion detection) (requirement: R13)
+- [x] T1.4 — Unit tests for `spec-sections` (`extractSpecSection`, `stripSpecSection`) (requirement: R13)
+- [x] T1.5 — Unit tests for `review-feedback` (FAIL detection, latest failed review formatting) (requirement: R13)
+- [x] T1.6 — Unit tests for `workflow-policy` (`sanitizeSteering`, host arch helpers, policy section builders) (requirement: R9, R13)
+- [x] T1.7 — Unit tests for `spec-steering` (parse, strip, phase-specific injection) (requirement: R13)
+- [x] T1.8 — Unit tests for `state` (`nextPhase`, `initialState`, path helpers) (requirement: R2, R13)
+- [x] T1.9 — Unit tests for `overseer` triggers (`shouldRunOverseer`, streak counting, history formatting) (requirement: R7, R13)
+- [x] T1.10 — Dogfood smoke: `curious run --cycle` completes develop→review→sync for one Progress task; `npm run build` and `npm test` pass on this host (requirement: R1, R2, R5)
 
 ### Phase 2: Orchestrator & resilience
 
@@ -117,6 +140,7 @@ Tasks use stable IDs. The sync phase checks these off when review passes. **All 
 - [ ] T2.3 — Tests or fixtures for orchestrator **roadmap complete** early exit (`untilDone` mode) (requirement: R2, R4)
 - [ ] T2.4 — Tests or fixtures for orchestrator `maxCycles` stop and phase-error resume behavior (requirement: R2, R4)
 - [ ] T2.5 — Harden `inspect` and `run-diagnostics` output for common failure modes; add unit tests for formatters (requirement: R10)
+- [x] T2.6 — `curious harvest --format dpo`: state + git join, quality filters, tests (`src/harvest/`, `src/review-verdict.ts`) (requirement: R17)
 
 ### Phase 3: Documentation & developer experience
 
@@ -143,23 +167,25 @@ _Phase 6 tasks are added by overseer or human when Phases 1–5 are complete. Se
 - [ ] T6.2 — Sync idempotency: verify Orchestrator log + Progress after sync phase (requirement: R16; feature NF2)
 - [ ] T6.3 — `curious doctor` subcommand for config, spec, roadmap, and health summary (requirement: R16; feature NF3)
 - [ ] T6.4 — Overseer “replenish roadmap” step: promote next items from **## Next features** when Roadmap is all `[x]` (requirement: R16; feature NF4)
-- [ ] T6.5 — Structured `review-verdict` parser module + use in sync path (requirement: R5; feature NF7)
+- [ ] T6.5 — Wire `parseReviewVerdict` into sync/overseer paths (parser exists; feature NF7)
+- [ ] T6.7 — Harvest: critique-SFT and process-reward JSONL exporters (feature NF15)
 - [ ] T6.6 — Persist last review verdict in `.curious/state.json` (requirement: R2; feature NF8)
 
 ## Progress
 
 - [x] T1.1 — Add `AGENTS.md` with TypeScript, Node ESM, CLI layout, verification commands (`build`, `typecheck`, `test`), and Curious review expectations (requirement: R14)
 - [x] T1.2 — Add `npm test` using `node:test` + `node:assert`; wire `package.json` script and document in `AGENTS.md` (requirement: R13)
-- [ ] T1.3 — Unit tests for `spec-roadmap` (`analyzeRoadmap`, task ID parsing, completion detection) (requirement: R13)
-- [ ] T1.4 — Unit tests for `spec-sections` (`extractSpecSection`, `stripSpecSection`) (requirement: R13)
-- [ ] T1.5 — Unit tests for `review-feedback` (FAIL detection, latest failed review formatting) (requirement: R13)
-- [ ] T1.6 — Unit tests for `workflow-policy` (`sanitizeSteering`, host arch helpers, policy section builders) (requirement: R9, R13)
-- [ ] T1.7 — Unit tests for `spec-steering` (parse, strip, phase-specific injection) (requirement: R13)
-- [ ] T1.8 — Unit tests for `state` (`nextPhase`, `initialState`, path helpers) (requirement: R2, R13)
-- [ ] T1.9 — Unit tests for `overseer` triggers (`shouldRunOverseer`, streak counting, history formatting) (requirement: R7, R13)
-- [ ] T1.10 — Dogfood smoke: `curious run --cycle` completes develop→review→sync for one Progress task; `npm run build` and `npm test` pass on this host (requirement: R1, R2, R5)
+- [x] T1.3 — Unit tests for `spec-roadmap` (`analyzeRoadmap`, task ID parsing, completion detection) (requirement: R13)
+- [x] T1.4 — Unit tests for `spec-sections` (`extractSpecSection`, `stripSpecSection`) (requirement: R13)
+- [x] T1.5 — Unit tests for `review-feedback` (FAIL detection, latest failed review formatting) (requirement: R13)
+- [x] T1.6 — Unit tests for `workflow-policy` (`sanitizeSteering`, host arch helpers, policy section builders) (requirement: R9, R13)
+- [x] T1.7 — Unit tests for `spec-steering` (parse, strip, phase-specific injection) (requirement: R13)
+- [x] T1.8 — Unit tests for `state` (`nextPhase`, `initialState`, path helpers) (requirement: R2, R13)
+- [x] T1.9 — Unit tests for `overseer` triggers (`shouldRunOverseer`, streak counting, history formatting) (requirement: R7, R13)
+- [x] T1.10 — Dogfood smoke: `curious run --cycle` completes develop→review→sync for one Progress task; `npm run build` and `npm test` pass on this host (requirement: R1, R2, R5)
+- [ ] T2.1 — Unit tests for `transient-errors` (`isTransientError`, `isAgentBusyError`, message extraction) (requirement: R10, R13)
 
-**After Phase 1:** run `curious run` for batch progress, or `curious run --continuous` to keep improving through Phase 6+ as overseer promotes **## Next features**.
+**Phase 1 complete.** Continue with `curious run` for batch progress, or `curious run --continuous` to keep improving through Phase 6+ as overseer promotes **## Next features**.
 
 ## Acceptance criteria
 
@@ -183,6 +209,7 @@ A requirement or roadmap task is **done** when:
 | CLI still runs         | `node dist/index.js --help`                                                                                     |
 | Dogfood smoke          | `curious run --cycle` from repo root with `CURSOR_API_KEY` set                                                  |
 | Continuous improvement | `curious run --continuous` — use after smoke passes; replenishes from **## Next features** when roadmap is done |
+| Harvest DPO              | `curious harvest --format dpo` — export after dogfood; writes `.curious/harvest/dpo.jsonl` |
 
 On **arm64**, do not require amd64-only or CI output for PASS. Cross-arch code: verify sources, tags, and host-runnable packages.
 
@@ -197,6 +224,14 @@ On **arm64**, do not require amd64-only or CI output for PASS. Cross-arch code: 
 | 3     | T1.1       | PASS   | Added `AGENTS.md` (137 lines); build/typecheck pass on arm64; R14 checked; next **T1.2** |
 | 4     | T1.2       | PASS   | Wired `npm test` (node:test); smoke test; AGENTS.md Running tests; next **T1.3** |
 | 5     | overseer   | ALIGNED | Checkbox audit: T1.1–T1.2 deliverables in tree; npm test pass; Progress → **T1.3**; no backtrack |
+| 5     | T1.3       | PASS   | `src/spec-roadmap.test.ts` (8 tests); npm test 9 pass on arm64; next **T1.4** |
+| 6     | T1.4       | PASS   | `src/spec-sections.test.ts` (12 tests); npm test 21 pass on arm64; next **T1.5** |
+| 7     | T1.5       | PASS   | `src/review-feedback.test.ts` (11 tests); npm test 32 pass on arm64; next **T1.6** |
+| 8     | T1.6       | PASS   | `src/workflow-policy.test.ts` (13 tests); npm test 45 pass on arm64; next **T1.7** |
+| 9     | T1.7       | PASS   | `src/spec-steering.test.ts` (12 tests); npm test 57 pass on arm64; next **T1.8** |
+| 10    | overseer   | ALIGNED | Checkbox audit: T1.1–T1.7 deliverables in tree; npm test 57 pass on arm64; Progress → **T1.8**; no backtrack |
+| 10    | T1.8       | PASS   | `src/state.test.ts` (11 tests); npm test 68 pass on arm64; next **T1.9** |
+| 11    | T1.9       | PASS   | `src/overseer.test.ts` (17 tests); npm test 85 pass on arm64; next **T1.10** |
 
 ## Constraints
 

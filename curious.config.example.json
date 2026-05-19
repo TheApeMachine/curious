@@ -9,5 +9,9 @@
   "overseerOnReviewFailStreak": 2,
   "settingSources": [
     "project"
-  ]
+  ],
+  "harvest": {
+    "enabled": false,
+    "output": ".curious/harvest/"
+  }
 }

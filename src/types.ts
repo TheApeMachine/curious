@@ -35,6 +35,12 @@ export interface CuriousConfig {
     skipReviewerRequest?: boolean;
     workOnCurrentBranch?: boolean;
   };
+  /** Fine-tuning export settings (opt-in; CLI `curious harvest` works regardless). */
+  harvest?: {
+    enabled?: boolean;
+    /** Output file or directory (default `.curious/harvest/`). */
+    output?: string;
+  };
 }
 
 export interface CycleRecord {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { runBootstrap } from "./commands/bootstrap.js";
+import { runHarvestCommand } from "./commands/harvest.js";
 import { runRoadmap } from "./commands/roadmap.js";
 import { resolveConfig } from "./config.js";
 import { inspectLastRun } from "./inspect-run.js";
@@ -20,6 +21,7 @@ Commands:
   curious roadmap [--verbose]
   curious run [options]
   curious status | reset | inspect [runId] | init [dir]
+  curious harvest [--format dpo] [--output path]
 
 Run modes (curious run):
   (default)           Until done — T1.1 … until every ## Roadmap task is [x]
@@ -121,6 +123,19 @@ async function main(): Promise<void> {
     case "init":
       await initProject(argv[1]?.startsWith("-") ? process.cwd() : (argv[1] ?? process.cwd()));
       break;
+    case "harvest": {
+      const harvestArgv: string[] = [];
+      for (let index = 1; index < argv.length; index++) {
+        const arg = argv[index];
+        if (arg === "--config" || arg === "-c") {
+          index++;
+          continue;
+        }
+        harvestArgv.push(arg);
+      }
+      await runHarvestCommand(configPath, harvestArgv);
+      break;
+    }
     case "inspect": {
       let inspectRunId: string | undefined;
       for (let index = 1; index < argv.length; index++) {

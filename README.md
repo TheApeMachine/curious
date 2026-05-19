@@ -186,6 +186,7 @@ Bootstrap seeds these constraints into new specs. **Edit caramba’s `spec/SPEC.
 | `curious status`                | Print config paths and `.curious/state.json` |
 | `curious reset`                 | Reset orchestrator state                     |
 | `curious inspect [runId]`       | Show transcript for a failed run             |
+| `curious harvest [--format dpo]` | Export fine-tuning JSONL from `.curious/state.json` |
 | `curious init [dir]`            | Create an empty spec template (no agent)     |
 | `curious --help`                | CLI help                                     |
 
