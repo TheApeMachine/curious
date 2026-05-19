@@ -5,12 +5,14 @@ from pathlib import Path
 
 from curious.config import resolve_config
 from curious.harness import run_harness
+from curious.workspace import prepare_agent_workspace
 from curious.project import DEFAULT_SPEC_REL
 from curious.prompts_tasks import build_bootstrap_prompt
 
 
 def run_bootstrap(config_path: str | None, verbose: bool) -> None:
     config = resolve_config(config_path=config_path, require_spec=False)
+    prepare_agent_workspace(config)
     spec = Path(config.spec_path)
 
     if config.has_spec:

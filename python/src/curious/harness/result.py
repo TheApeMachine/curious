@@ -10,7 +10,7 @@ Use the provided tools to read files, edit code, and run commands. Follow the us
 
 Rules:
 - Deliver work in the working tree; the human commits later.
-- Use read-only git only (status, diff, log) — never commit, add, reset, restore, checkout, stash, or worktree.
+- Use read-only git only (status, diff, log) — never commit, add, reset, restore, switch, checkout, stash, or worktree. Curious already checked out the agent branch.
 - When uncertain, read files — on-disk content is the source of truth.
 - End with a clear summary of what you did and verification you ran."""
 

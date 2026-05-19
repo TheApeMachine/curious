@@ -68,6 +68,9 @@ class CuriousConfig:
     cwd: str
     llm: LlmConfig
     harness: HarnessConfig = field(default_factory=HarnessConfig)
+    """Git branch Curious checks out before agent work (default: curious)."""
+    agent_branch: str = "curious"
+    ensure_agent_branch: bool = True
     cycle_delay_ms: int = 0
     max_cycles: int = 0
     overseer_every_n_cycles: int = 5

@@ -79,6 +79,14 @@ export function configFromEnv(): Partial<CuriousConfig> {
       process.env.CURIOUS_OVERSEER_FAIL_STREAK,
     );
   }
+  if (process.env.CURIOUS_AGENT_BRANCH) {
+    partial.agentBranch = process.env.CURIOUS_AGENT_BRANCH;
+  }
+  if (process.env.CURIOUS_ENSURE_AGENT_BRANCH !== undefined) {
+    partial.ensureAgentBranch = ["1", "true", "yes"].includes(
+      process.env.CURIOUS_ENSURE_AGENT_BRANCH.toLowerCase(),
+    );
+  }
   return partial;
 }
 
@@ -163,6 +171,17 @@ export function printConfigSummary(config: ResolvedConfig): void {
     `[curious] host: ${hostArchLabel()} (verify on this arch only${isArm64Host() ? "; amd64-tagged tests N/A" : ""})`,
   );
   console.log("[curious] commits: human only (agents must not git commit)");
+  if (config.ensureAgentBranch !== false) {
+    const { currentBranch, gitToplevel } = await import("./git-branch.js");
+    const root = await gitToplevel(config.projectRoot);
+    const branch = root ? await currentBranch(root) : null;
+    const target = config.agentBranch ?? "curious";
+    const pending = root && branch !== target;
+    console.log(
+      `[curious] git branch: ${branch ?? target}` +
+        (pending ? " (will switch before agent runs)" : ""),
+    );
+  }
   if (config.overseerEveryNCycles > 0 || config.overseerOnReviewFailStreak > 0) {
     const parts: string[] = [];
     if (config.overseerEveryNCycles > 0) {

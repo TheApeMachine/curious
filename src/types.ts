@@ -27,6 +27,10 @@ export interface CuriousConfig {
   overseerEveryNCycles: number;
   /** Run overseer when this many consecutive review FAILs occur (0 = disable). */
   overseerOnReviewFailStreak: number;
+  /** Git branch Curious checks out before agent work (default: curious). */
+  agentBranch?: string;
+  /** When false, skip automatic branch switch (default: true). */
+  ensureAgentBranch?: boolean;
   /** Load .cursor project settings (MCP, agents, hooks). */
   settingSources?: Array<"project" | "user" | "team" | "mdm" | "plugins" | "all">;
   cloud?: {

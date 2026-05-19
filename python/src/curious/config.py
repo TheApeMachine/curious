@@ -119,6 +119,10 @@ def _config_from_file_data(data: dict, resolve_relative_to: Path) -> dict:
                 harness_raw.get("command_timeout_sec", 300),
             ),
         },
+        "agent_branch": data.get("agentBranch", data.get("agent_branch", "curious")),
+        "ensure_agent_branch": data.get(
+            "ensureAgentBranch", data.get("ensure_agent_branch", True)
+        ),
         "cycle_delay_ms": data.get("cycleDelayMs", data.get("cycle_delay_ms", 0)),
         "max_cycles": data.get("maxCycles", data.get("max_cycles", 0)),
         "overseer_every_n_cycles": data.get(
@@ -194,6 +198,8 @@ def _dict_to_config(d: dict) -> CuriousConfig:
             max_turns=int(harness_d.get("max_turns", 80)),
             command_timeout_sec=int(harness_d.get("command_timeout_sec", 300)),
         ),
+        agent_branch=str(d.get("agent_branch", "curious")),
+        ensure_agent_branch=bool(d.get("ensure_agent_branch", True)),
         cycle_delay_ms=int(d.get("cycle_delay_ms", 0)),
         max_cycles=int(d.get("max_cycles", 0)),
         overseer_every_n_cycles=int(d.get("overseer_every_n_cycles", 5)),
@@ -252,6 +258,14 @@ def config_from_env() -> dict:
         partial["overseerEveryNCycles"] = int(os.environ["CURIOUS_OVERSEER_EVERY_N_CYCLES"])
     if os.environ.get("CURIOUS_OVERSEER_FAIL_STREAK"):
         partial["overseerOnReviewFailStreak"] = int(os.environ["CURIOUS_OVERSEER_FAIL_STREAK"])
+    if os.environ.get("CURIOUS_AGENT_BRANCH"):
+        partial["agentBranch"] = os.environ["CURIOUS_AGENT_BRANCH"]
+    if os.environ.get("CURIOUS_ENSURE_AGENT_BRANCH") is not None:
+        partial["ensureAgentBranch"] = os.environ["CURIOUS_ENSURE_AGENT_BRANCH"].lower() in (
+            "1",
+            "true",
+            "yes",
+        )
     return partial
 
 
@@ -325,6 +339,8 @@ def resolve_config(
         cwd=config.cwd,
         llm=config.llm,
         harness=config.harness,
+        agent_branch=config.agent_branch,
+        ensure_agent_branch=config.ensure_agent_branch,
         cycle_delay_ms=config.cycle_delay_ms,
         max_cycles=config.max_cycles,
         overseer_every_n_cycles=config.overseer_every_n_cycles,
@@ -352,6 +368,15 @@ def print_config_summary(config: ResolvedConfig) -> None:
     amd64_note = "; amd64-tagged tests N/A" if is_arm64_host() else ""
     print(f"[curious] host: {arch} (verify on this arch only{amd64_note})")
     print("[curious] commits: human only (agents must not git commit)")
+    if config.ensure_agent_branch:
+        from curious.git_branch import current_branch, git_toplevel
+
+        root = git_toplevel(Path(config.project_root))
+        branch = current_branch(root) if root else None
+        print(
+            f"[curious] git branch: {branch or config.agent_branch}"
+            + (" (will switch before agent runs)" if root and branch != config.agent_branch else "")
+        )
     if config.overseer_every_n_cycles > 0 or config.overseer_on_review_fail_streak > 0:
         parts = []
         if config.overseer_every_n_cycles > 0:

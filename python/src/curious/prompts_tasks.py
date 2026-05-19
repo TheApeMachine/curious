@@ -9,6 +9,7 @@ from curious.project import (
     relative_to_root,
 )
 from curious.types import ResolvedConfig
+from curious.workspace import agent_branch_prompt_note_for_config
 from curious.workflow_policy import (
     WORKFLOW_SPEC_CONSTRAINTS,
     build_workflow_policy_section,
@@ -71,7 +72,7 @@ You are the **spec author** agent. Produce the first `{spec_rel}` for this proje
 {build_workflow_policy_section(host_arch_label())}
 
 {GIT_POLICY_SECTION}
-
+{agent_branch_prompt_note_for_config(config)}
 {SPEC_SCHEMA}
 
 ## Workspace
@@ -108,7 +109,7 @@ You are the **roadmap planner** agent.
 {build_workflow_policy_section(host_arch_label())}
 
 {GIT_POLICY_SECTION}
-
+{agent_branch_prompt_note_for_config(config)}
 {SPEC_SCHEMA}
 
 ## Workspace

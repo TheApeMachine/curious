@@ -13,7 +13,9 @@ from curious.spec_steering import (
     strip_agent_steering,
 )
 from curious.types import CycleRecord, Phase
+from curious.types import ResolvedConfig
 from curious.workflow_policy import build_workflow_policy_section, host_arch_label
+from curious.workspace import agent_branch_prompt_note_for_config
 
 REVIEW_RUBRIC = """
 ## Review rubric (mandatory)
@@ -140,6 +142,7 @@ def build_prompt(
     cycle: int,
     cwd: str,
     project_root: str,
+    config: ResolvedConfig | None = None,
     agents: AgentsDocument | None = None,
     last_summary: str | None = None,
     history: list[CycleRecord] | None = None,
@@ -159,6 +162,11 @@ def build_prompt(
         "",
         GIT_POLICY_SECTION,
     ]
+
+    if config:
+        branch_note = agent_branch_prompt_note_for_config(config)
+        if branch_note:
+            sections.append(branch_note)
 
     if steering:
         sections.extend(["", format_steering_prompt_block(phase, steering)])

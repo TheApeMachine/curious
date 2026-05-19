@@ -8,6 +8,8 @@ You may **read** repository state and history only. **Never** run git (or any sh
 
 The **human** commits; agents deliver changes in the **working tree**. Reviewers judge \`git diff\` and files on disk — not whether \`HEAD\` includes the fix.
 
+**Curious host** checks out the \`curious\` agent branch before each run. Stay on that branch — do not run \`git switch\`, \`git checkout\`, or worktrees.
+
 ### Allowed (read-only)
 
 \`git status\`, \`git diff\`, \`git log\`, \`git show\`, \`git branch\` (list only), \`git rev-parse\`, \`git describe\`, \`git ls-files\`, \`git blame\`, \`git shortlog\`, \`git diff-tree\`, \`git cat-file\`
@@ -16,7 +18,7 @@ The **human** commits; agents deliver changes in the **working tree**. Reviewers
 
 - **Discard / undo work:** \`git reset\`, \`git restore\`, \`git checkout\` / \`git switch\` when it would move HEAD or drop local changes, \`git clean\`, \`git stash\` / \`git stash pop\` / \`git stash drop\`
 - **History / refs:** \`git revert\`, \`git rebase\`, \`git cherry-pick\`, \`git merge\`, \`git pull\`, \`git push\`, \`git commit\`, \`git add\`, \`git am\`
-- **Worktrees / branch games:** \`git worktree\`, checking out other branches to “sync” deliverables — stay on the current branch; edit files in place
+- **Worktrees / branch games:** \`git worktree\`, \`git switch\`, \`git checkout\` (any branch change) — Curious already placed you on the agent branch; edit files in place
 - **Destructive:** removing or rewriting \`.git\`, force-push, or aliases/scripts that perform the above
 
 Inspect changes with \`git status\` / \`git diff\` / \`git log\` only. To fix files, use editor tools — **not** git reset/restore/checkout.`;

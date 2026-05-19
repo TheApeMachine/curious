@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from curious.config import ResolvedConfig, print_config_summary
+from curious.workspace import prepare_agent_workspace
 from curious.harness import run_harness
 from curious.orchestrator_cycles import (
     should_abort_cycles_mode_on_phase_error,
@@ -46,6 +47,7 @@ class Orchestrator:
         self.stopping = True
 
     def run(self) -> None:
+        prepare_agent_workspace(self.config)
         print_config_summary(self.config)
         state = load_state(self.config.project_root)
         state.running = True
@@ -160,6 +162,7 @@ class Orchestrator:
             cycle=state.cycle,
             cwd=self.config.cwd,
             project_root=self.config.project_root,
+            config=self.config,
             agents=agents,
             last_summary=self.last_summary,
             history=state.history,
