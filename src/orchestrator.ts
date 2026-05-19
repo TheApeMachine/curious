@@ -3,6 +3,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { CursorAgentError, type SDKAgent } from "@cursor/sdk";
 import type { Run, SendOptions } from "@cursor/sdk";
 import { connectAgent } from "./agent.js";
+import { installConnectionGuard } from "./connection-guard.js";
 import type { ResolvedConfig } from "./config.js";
 import { printConfigSummary } from "./config.js";
 import { loadAgentsDocument, relativeToRoot } from "./project.js";
@@ -46,6 +47,8 @@ export class Orchestrator {
   private agent?: SDKAgent;
   private stopping = false;
   private lastSummary?: string;
+  /** True when we cancelled a run to recover from a dropped connection. */
+  private recoveryCancel = false;
 
   constructor(
     private readonly config: ResolvedConfig,
@@ -233,8 +236,18 @@ export class Orchestrator {
         console.log(`[curious] run status → ${status}`);
       });
 
+      this.recoveryCancel = false;
+      const guard = installConnectionGuard(run, () => {
+        this.recoveryCancel = true;
+      });
+
       try {
-        await consumeRunStream(run, { verbose: this.opts.verbose, progress: true });
+        await consumeRunStream(run, {
+          verbose: this.opts.verbose,
+          progress: true,
+          signal: guard.abort.signal,
+        });
+
         const result = await run.wait();
 
         status = result.status;
@@ -246,6 +259,9 @@ export class Orchestrator {
           console.error(`[curious] run error: ${runId}`);
           await logRunFailure(run);
         } else if (result.status === "cancelled") {
+          if (this.recoveryCancel || guard.abort.signal.aborted) {
+            throw guard.abort.signal.reason ?? new Error("connection lost");
+          }
           console.log(`[curious] run cancelled: ${runId}`);
           this.stopping = true;
         } else {
@@ -261,7 +277,9 @@ export class Orchestrator {
           }
         }
       } finally {
+        guard.dispose();
         statusStop();
+        this.recoveryCancel = false;
       }
     } catch (err) {
       const message = errorMessage(err);

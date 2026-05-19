@@ -5,6 +5,7 @@ import { resolveConfig } from "./config.js";
 import { inspectLastRun } from "./inspect-run.js";
 import { initProject } from "./init-project.js";
 import { Orchestrator, printStatus, resetState } from "./orchestrator.js";
+import { errorMessage, isTransientError } from "./transient-errors.js";
 
 function printHelp(): void {
   console.log(`curious — spec-driven agent workflow
@@ -147,6 +148,13 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
+  if (isTransientError(err)) {
+    console.error(
+      `[curious] connection lost: ${errorMessage(err)}\n` +
+        "[curious] state saved — run `curious run` again to resume the current phase",
+    );
+    process.exit(1);
+  }
   console.error(err);
   process.exit(1);
 });
