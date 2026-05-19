@@ -9,6 +9,7 @@ from curious.commands.roadmap import run_roadmap
 from curious.commands.spec_history import run_spec_history_correlate
 from curious.commands.train import run_train_dpo
 from curious.commands.train_grpo import run_train_grpo
+from curious.commands.train_reviewer import run_train_reviewer
 from curious.commands.train_verifier import run_train_verifier
 from curious.config import resolve_config
 from curious.harvest import run_harvest
@@ -158,11 +159,17 @@ def main(argv: list[str] | None = None) -> None:
             ver_p.add_argument("--dataset")
             ver_p.add_argument("--model")
             ver_p.add_argument("-o", "--output")
-            grpo_p = train_sub.add_parser("grpo", help="GRPO repo-specialization (scaffold)")
-            grpo_p.add_argument("--tasks-file")
+            grpo_p = train_sub.add_parser("grpo", help="GRPO fine-tune with verifier reward")
+            grpo_p.add_argument("--tasks-file", help="grpo.jsonl prompts (or harvest --format grpo)")
             grpo_p.add_argument("--model")
             grpo_p.add_argument("-o", "--output")
             grpo_p.add_argument("--rollouts", type=int, default=4)
+            grpo_p.add_argument("--max-completion-length", type=int, default=2048)
+            grpo_p.add_argument("--epochs", type=int, default=1)
+            rev_p = train_sub.add_parser("reviewer", help="Train reviewer on downstream outcomes")
+            rev_p.add_argument("--dataset")
+            rev_p.add_argument("--model")
+            rev_p.add_argument("-o", "--output")
             train_args = train_parser.parse_args(rest)
             if train_args.train_cmd == "dpo":
                 run_train_dpo(
@@ -186,6 +193,15 @@ def main(argv: list[str] | None = None) -> None:
                     tasks_file=train_args.tasks_file,
                     output_dir=train_args.output,
                     n_rollouts_per_task=train_args.rollouts,
+                    max_completion_length=train_args.max_completion_length,
+                    num_epochs=train_args.epochs,
+                )
+            elif train_args.train_cmd == "reviewer":
+                run_train_reviewer(
+                    args.config,
+                    base_model=train_args.model,
+                    dataset_path=train_args.dataset,
+                    output_dir=train_args.output,
                 )
             else:
                 raise ValueError(f"Unknown train command: {train_args.train_cmd}")

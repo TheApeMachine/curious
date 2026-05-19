@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from curious.config import HF_DEFAULT_MODEL, resolve_config
+from curious.train.dpo_format import completion_from_row, rejection_from_row
 from curious.types import TrainConfig
 
 
@@ -67,26 +68,28 @@ def run_train_dpo(
         base_model = HF_DEFAULT_MODEL
 
     raw = _load_dpo_jsonl(data_file)
-    records = [
-        {
-            "prompt": row["prompt"],
-            "chosen": row["chosen"],
-            "rejected": row["rejected"],
-        }
-        for row in raw
-        if float(row.get("quality_score", 0)) >= min_quality
-    ]
-    if not records:
+    filtered = [row for row in raw if float(row.get("quality_score", 0)) >= min_quality]
+    if not filtered:
         raise ValueError(f"No examples >= min_quality={min_quality} in {data_file}")
 
-    print(f"[curious] train dpo: {len(records)} examples from {data_file}")
+    print(f"[curious] train dpo: {len(filtered)} examples from {data_file}")
     print(f"[curious] train dpo: base model {base_model}")
     print(f"[curious] train dpo: output → {out_dir}")
 
-    dataset = Dataset.from_list(records)
     tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+
+    records = [
+        {
+            "prompt": row["prompt"],
+            "chosen": completion_from_row(row, tokenizer),
+            "rejected": rejection_from_row(row, tokenizer),
+        }
+        for row in filtered
+    ]
+
+    dataset = Dataset.from_list(records)
 
     model = AutoModelForCausalLM.from_pretrained(
         base_model,

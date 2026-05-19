@@ -4,7 +4,11 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import torch
+
+from curious.train.verifier_checkpoint import CHECKPOINT_META, load_verifier_meta
 from curious.types import CRITERION_KEYS
+from curious.verifier.architecture import build_verifier_model
 
 VERIFIER_INPUT_TEMPLATE = (
     "<|spec|>\n{spec_section}\n<|agents|>\n{agents_section}\n<|diff|>\n{diff}\n"
@@ -36,8 +40,6 @@ class VerifierModel:
         agents_section: str,
         max_length: int = 4096,
     ) -> VerifierScores:
-        import torch
-
         text = VERIFIER_INPUT_TEMPLATE.format(
             spec_section=spec_section[:8000],
             agents_section=agents_section[:4000],
@@ -52,11 +54,9 @@ class VerifierModel:
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
         with torch.no_grad():
+            self.model.eval()
             outputs = self.model(**inputs)
-            if hasattr(outputs, "logits"):
-                logits = outputs.logits
-            else:
-                logits = outputs[0]
+            logits = outputs["logits"] if isinstance(outputs, dict) else outputs.logits
             if logits.dim() > 1:
                 logits = logits[0]
             probs = torch.sigmoid(logits).cpu().tolist()
@@ -83,53 +83,30 @@ def load_verifier(
     *,
     num_labels: int = len(CRITERION_KEYS),
 ) -> VerifierModel:
-    import torch
-    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    checkpoint_dir = Path(model_path) if model_path else None
+    meta = (
+        load_verifier_meta(checkpoint_dir)
+        if checkpoint_dir and checkpoint_dir.is_dir()
+        else None
+    )
 
-    path = model_path or base_model
-    tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    if meta and meta.get("format") == "curious-verifier-v1":
+        base_model = meta.get("base_model", base_model)
+        model, tokenizer = build_verifier_model(base_model, num_labels=num_labels)
+        state_file = checkpoint_dir / meta.get("state_dict", "verifier_head.pt")
+        if state_file.is_file():
+            state = torch.load(state_file, map_location="cpu", weights_only=True)
+            model.load_state_dict(state, strict=True)
+        tok_dir = checkpoint_dir
+        if (tok_dir / "tokenizer_config.json").is_file():
+            from transformers import AutoTokenizer
 
-    try:
-        model = AutoModelForSequenceClassification.from_pretrained(
-            path,
-            num_labels=num_labels,
-            torch_dtype="auto",
-            device_map="auto",
-            trust_remote_code=True,
-        )
-    except Exception:
-        from transformers import AutoModel
-        import torch.nn as nn
+            tokenizer = AutoTokenizer.from_pretrained(str(tok_dir), trust_remote_code=True)
+        device = next(model.parameters()).device
+        model.eval()
+        return VerifierModel(model, tokenizer, device)
 
-        backbone = AutoModel.from_pretrained(
-            base_model,
-            torch_dtype="auto",
-            device_map="auto",
-            trust_remote_code=True,
-        )
-        hidden = backbone.config.hidden_size
-
-        class ClassifierHead(nn.Module):
-            def __init__(self) -> None:
-                super().__init__()
-                self.head = nn.Linear(hidden, num_labels)
-
-            def forward(self, **kwargs):
-                out = backbone(**kwargs)
-                last = out.last_hidden_state
-                mask = kwargs.get("attention_mask")
-                if mask is not None:
-                    idx = mask.sum(dim=1) - 1
-                    pooled = last[torch.arange(last.size(0)), idx]
-                else:
-                    pooled = last[:, -1, :]
-                return type("Out", (), {"logits": self.head(pooled)})()
-
-        model = ClassifierHead()
-        tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
-
+    model, tokenizer = build_verifier_model(base_model, num_labels=num_labels)
     device = next(model.parameters()).device
     model.eval()
     return VerifierModel(model, tokenizer, device)

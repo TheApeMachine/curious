@@ -5,6 +5,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from curious.harvest.dpo import DpoExample, harvest_dpo_pairs
+from curious.harvest.grpo import harvest_grpo_tasks
 from curious.harvest.reviewer import harvest_reviewer_examples
 from curious.harvest.verifier import (
     VerifierExample,
@@ -81,9 +82,17 @@ def run_harvest(
         examples = harvest_reviewer_examples(state, project_root=config.project_root)
         rows = examples_to_jsonl_rows(examples)
         accepted = examples
+    elif fmt == "grpo":
+        examples = harvest_grpo_tasks(
+            state,
+            project_root=config.project_root,
+            spec_path=config.spec_path,
+        )
+        rows = [ex.to_json() for ex in examples]
+        accepted = examples
     else:
         raise ValueError(
-            f"Unsupported harvest format: {fmt} (use dpo, verifier, or reviewer)"
+            f"Unsupported harvest format: {fmt} (use dpo, verifier, reviewer, or grpo)"
         )
 
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -40,10 +40,16 @@ Disagreements → `.curious/verifier_disagreement.jsonl`
 ## Phase 3 — Trajectory DPO & GRPO
 
 ```bash
-curious-py harvest --format dpo   # includes tool trajectories
-curious-py train dpo
-curious-py train grpo             # scaffold + tasks.jsonl from roadmap
+curious-py harvest --format dpo      # tool trajectories in chosen/rejected
+curious-py harvest --format grpo     # develop prompts from roadmap + history
+curious-py train verifier            # optional but used in GRPO reward
+curious-py train grpo --rollouts 4   # TRL GRPOTrainer + composite reward
+curious-py train dpo                 # DPO on trajectory-formatted pairs
 ```
+
+GRPO reward = `0.65 × verifier + 0.25 × heuristics − scanner penalties` (see `train/grpo_reward.py`).
+
+After GRPO, set `llm.adapterPath` to `.curious/train/grpo` and `llm.provider` to `transformers`.
 
 ## Phase 4 — Split models & reviewer harvest
 
